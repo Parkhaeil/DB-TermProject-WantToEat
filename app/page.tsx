@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { UtensilsCrossed, LogOut, Users, Plus, Key } from "lucide-react";
+import CreateFamilyModal from "./home/CreateFamilyModal";
+import InviteCodeModal from "./home/InviteCodeModal";
 
 // ============================
 // ⭐ 프론트용 더미 데이터
@@ -32,12 +34,16 @@ const dummyFamilies = [
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(true);
 
+  // 🔹 모달 상태
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+
   return (
-    <div className="flex flex-col w-full h-full bg-[#FCFAF8] text-[#32241B]">
+    <div className="flex flex-col w-full min-h-screen bg-[#FCFAF8] text-[#32241B]">
       
       {/* 헤더 */}
       <div className="flex items-center justify-between w-full h-18 gap-4 px-10 bg-[#FFFFFF] border-b border-[#E7E1DA]">
-        
+
         {/* 로고 */}
         <div className="flex gap-3 items-center">
           <UtensilsCrossed className="scale-130 text-[#F2805A]" />
@@ -46,26 +52,23 @@ export default function Home() {
 
         {/* 로그인 상태별 UI */}
         <div className="flex items-center gap-3">
-
-          {/* 로그인 전 */}
           {!isLoggedIn && (
             <>
               <button
-                className="bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl text-[12px] font-semibold
-                           transition-all duration-150 transform active:scale-95"
+                className="bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
+                           text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
               >
                 로그인
               </button>
               <button
-                className="bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl text-[12px] font-semibold
-                           transition-all duration-150 transform active:scale-95"
+                className="bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
+                           text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
               >
                 회원가입
               </button>
             </>
           )}
 
-          {/* 로그인 후 */}
           {isLoggedIn && (
             <div className="flex items-center gap-4">
               <div className="leading-4 flex flex-col items-end">
@@ -85,9 +88,9 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 내용 */}
+      {/* 메인 콘텐츠 */}
       <div className="flex flex-col w-full px-40 py-10 gap-8">
-        
+
         {/* 인삿말 */}
         <div>
           <div className="font-bold text-[30px]">환영합니다! 👋</div>
@@ -102,20 +105,19 @@ export default function Home() {
             <Users className="text-[#F2805A]" />
             <div className="font-bold">내 가족 목록</div>
           </div>
-          
+
           <div className="flex gap-6">
             {dummyFamilies.map((f) => (
               <div
                 key={f.family_id}
                 className="bg-[#FFFFFF] border border-[#DDDDDD] p-4 rounded-xl w-85"
               >
-                
                 {/* 제목 + 역할 */}
                 <div className="flex justify-between items-center mb-3">
                   <div className="font-bold text-[18px]">{f.family_name}</div>
 
                   <div
-                    className={`rounded-2xl px-2.5 py-1 text-[10px] font-semibold items-center flex
+                    className={`rounded-2xl px-2.5 py-1 text-[10px] font-semibold 
                                 ${
                                   f.role === "PARENT"
                                     ? "bg-[#F2805A] text-white"
@@ -134,7 +136,7 @@ export default function Home() {
                   <div className="text-[12px] font-semibold">{f.member_count}명</div>
                 </div>
 
-                <div className="border-[0.5px] border-[#E7E1DA] mb-3"></div>
+                <div className="border-[0.5px] border-[#E7E1DA] mb-3" />
 
                 {/* 오늘의 메뉴 */}
                 <div className="text-[12px] text-[#847062] font-semibold">
@@ -145,8 +147,8 @@ export default function Home() {
                 </div>
 
                 <button
-                  className="bg-[#F2805A] text-white rounded-2xl text-[12px] font-bold py-2 w-full
-                             transition-all duration-150 transform active:scale-95"
+                  className="bg-[#F2805A] text-white rounded-2xl text-[12px] 
+                             font-bold py-2 w-full transition-all duration-150 transform active:scale-95"
                 >
                   가족 들어가기
                 </button>
@@ -157,39 +159,41 @@ export default function Home() {
 
         {/* 가족 참여하기 */}
         <div>
-          <div className="flex items-center gap-2 mb-4 font-bold">
-            가족 참여하기
-          </div>
+          <div className="flex items-center gap-2 mb-4 font-bold">가족 참여하기</div>
 
           <div className="flex gap-6">
-
-            {/* 새 가족 만들기 카드 */}
+            
+            {/* 새 가족 만들기 */}
             <div className="bg-[#FFF6F4] border border-[#FDE0D8] rounded-2xl flex flex-col items-center py-10 px-33">
               <Plus size={35} className="bg-[#FDDED4] rounded-full text-[#F2805A] w-auto h-auto p-2 mb-4" />
+
               <div className="font-bold mb-1">새 가족 만들기</div>
               <div className="text-[#847062] text-[11px] font-semibold mb-4">
                 우리 가족만이 메뉴판을 시작하세요
               </div>
 
               <button
-                className="bg-[#F2805A] text-white rounded-xl px-11 py-2 text-[12px] font-bold
-                           transition-all duration-150 transform active:scale-95"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="bg-[#F2805A] text-white rounded-xl px-11 py-2 text-[12px] 
+                           font-bold transition-all duration-150 transform active:scale-95"
               >
                 가족 생성하기
               </button>
             </div>
 
-            {/* 초대코드로 참여 카드 */}
+            {/* 초대 코드로 참여 */}
             <div className="bg-[#FFFEFB] border border-[#E7E1DA] rounded-2xl flex flex-col items-center py-10 px-33">
               <Key size={25} className="bg-[#FFFAEC] rounded-full w-auto h-auto p-3 mb-4" />
+
               <div className="font-bold mb-1">초대 코드로 참여</div>
               <div className="text-[#847062] text-[11px] font-semibold mb-4">
                 가족이 보낸 코드를 입력하세요
               </div>
 
               <button
-                className="bg-[#FCFAF8] border border-[#E7E1DA] rounded-xl px-11 py-2 text-[12px] font-bold
-                           transition-all duration-150 transform active:scale-95"
+                onClick={() => setIsInviteModalOpen(true)}
+                className="bg-[#FCFAF8] border border-[#E7E1DA] rounded-xl px-11 py-2 
+                           text-[12px] font-bold transition-all duration-150 transform active:scale-95"
               >
                 가족 참여하기
               </button>
@@ -197,8 +201,19 @@ export default function Home() {
 
           </div>
         </div>
-
       </div>
+
+      {/* 새 가족 생성 모달 */}
+      <CreateFamilyModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+      />
+
+      {/* 초대 코드 입력 모달 */}
+      <InviteCodeModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+      />
     </div>
   );
 }
