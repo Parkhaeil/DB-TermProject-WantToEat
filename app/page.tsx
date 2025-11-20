@@ -1,5 +1,5 @@
 "use client";
-
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { UtensilsCrossed, LogOut, Users, Plus, Key } from "lucide-react";
 import CreateFamilyModal from "./home/CreateFamilyModal";
@@ -32,9 +32,10 @@ const dummyFamilies = [
 ];
 
 export default function Home() {
+  const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(true);
 
-  // 🔹 모달 상태
+  // 모달 상태
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
@@ -55,16 +56,11 @@ export default function Home() {
           {!isLoggedIn && (
             <>
               <button
+                onClick={() => router.push("/login")}
                 className="bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
                            text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
               >
-                로그인
-              </button>
-              <button
-                className="bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
-                           text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
-              >
-                회원가입
+                로그인 / 회원가입
               </button>
             </>
           )}
@@ -121,12 +117,16 @@ export default function Home() {
                                 ${
                                   f.role === "PARENT"
                                     ? "bg-[#F2805A] text-white"
-                                    : "bg-[#F5F0EC] text-[#847062]"
+                                  : f.role === "FOLLOWER"
+                                    ? "bg-[#F5F0EC] text-[#847062]"
+                                  : f.role === "CHILD"
+                                    ? "bg-[#86E0B3] text-[#32241B]"
+                                  : ""
                                 }`}
                   >
                     {f.role === "PARENT" && "부모"}
-                    {f.role === "FOLLOWER" && "팔로워"}
                     {f.role === "CHILD" && "군식구"}
+                    {f.role === "FOLLOWER" && "팔로워"}
                   </div>
                 </div>
 
