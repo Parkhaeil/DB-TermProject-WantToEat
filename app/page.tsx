@@ -51,7 +51,6 @@ export default function HomePage() {
     if (typeof window !== "undefined") {
       localStorage.removeItem("isLoggedIn");
     }
-    router.push("/login");
   };
 
   return (
@@ -136,7 +135,7 @@ export default function HomePage() {
                         }`}
                     >
                       {f.role === "PARENT" && "부모"}
-                      {f.role === "CHILD" && "군식구"}
+                      {f.role === "CHILD" && "자식"}
                       {f.role === "FOLLOWER" && "팔로워"}
                     </div>
                   </div>
