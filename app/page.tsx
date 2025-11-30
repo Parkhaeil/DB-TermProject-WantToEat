@@ -6,50 +6,86 @@ import { UtensilsCrossed, LogOut, Users, Plus, Key } from "lucide-react";
 import CreateFamilyModal from "./home/CreateFamilyModal";
 import InviteCodeModal from "./home/InviteCodeModal";
 
-// ⭐ 프론트용 더미 데이터
-const dummyUser = {
-  user_id: 1,
-  nickname: "유민",
-  email: "yumin@example.com",
+type FamilyCard = {
+  family_id: number;
+  family_name: string;
+  role: "PARENT" | "CHILD" | "FOLLOWER";
+  member_count: number;
+  today_menu: string | null;
 };
 
-const dummyFamilies = [
-  {
-    family_id: 101,
-    family_name: "이유민네 메뉴판",
-    role: "PARENT",
-    member_count: 4,
-    today_menu: "김치찌개",
-  },
-  {
-    family_id: 102,
-    family_name: "서혜민네 메뉴판",
-    role: "FOLLOWER",
-    member_count: 3,
-    today_menu: null,
-  },
-];
+type CurrentUser = {
+  userId: number;
+  email: string;
+  nickname: string;
+};
 
 export default function HomePage() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  // 🔹 첫 진입 시 localStorage 보고 로그인 상태 복원
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("isLoggedIn");
-      setIsLoggedIn(stored === "true");
-    }
-  }, []);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [families, setFamilies] = useState<FamilyCard[]>([]);
+  const [loadingFamilies, setLoadingFamilies] = useState(false);
 
   // 모달 상태
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
+   // 🔹 첫 진입 시 localStorage 보고 로그인 상태 & 유저 복원 + 가족 목록 불러오기
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const loggedIn = localStorage.getItem("isLoggedIn") === "true";
+    setIsLoggedIn(loggedIn);
+
+    const storedUser = localStorage.getItem("currentUser");
+
+    console.log("Home useEffect 실행");
+    console.log("localStorage.isLoggedIn =", loggedIn);
+    console.log("localStorage.currentUser =", storedUser);
+
+    if (loggedIn && storedUser) {
+      try {
+        const parsed: CurrentUser = JSON.parse(storedUser);
+        setCurrentUser(parsed);
+
+        // 로그인 + 유저 정보 있으면 가족 목록 불러오기
+        fetchFamilies(parsed.userId);
+      } catch (e) {
+        console.error("currentUser 파싱 에러:", e);
+      }
+    }
+  }, []);
+
+
+  const fetchFamilies = async (userId: number) => {
+    try {
+      setLoadingFamilies(true);
+      const res = await fetch(`/api/families?userId=${userId}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("가족 목록 에러:", data);
+        return;
+      }
+
+      setFamilies(data);
+    } catch (error) {
+      console.error("가족 목록 불러오기 실패:", error);
+    } finally {
+      setLoadingFamilies(false);
+    }
+  };
+
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setCurrentUser(null);
+    setFamilies([]);
     if (typeof window !== "undefined") {
       localStorage.removeItem("isLoggedIn");
+       localStorage.removeItem("currentUser");
     }
   };
 
@@ -79,7 +115,7 @@ export default function HomePage() {
             <div className="flex items-center gap-4">
               <div className="leading-4 flex flex-col items-end">
                 <div className="text-[10px] text-[#847062]">안녕하세요,</div>
-                <div className="text-[14px] font-bold">{dummyUser.nickname}님</div>
+                <div className="text-[14px] font-bold">{(currentUser?.nickname ?? "사용자")}님</div>
               </div>
 
               <button
@@ -113,59 +149,70 @@ export default function HomePage() {
 
           {isLoggedIn ? (
             <div className="flex gap-6">
-              {dummyFamilies.map((f) => (
-                <div
-                  key={f.family_id}
-                  className="bg-[#FFFFFF] border border-[#DDDDDD] p-4 rounded-xl w-85"
-                >
-                  {/* 제목 + 역할 */}
-                  <div className="flex justify-between items-center mb-3">
-                    <div className="font-bold text-[18px]">{f.family_name}</div>
+              {loadingFamilies && (
+                <div className="text-[12px] text-[#847062]">가족 목록 불러오는 중...</div>
+              )}
 
-                    <div
-                      className={`rounded-2xl px-2.5 py-1 text-[10px] font-semibold 
-                        ${
-                          f.role === "PARENT"
-                            ? "bg-[#F2805A] text-white"
-                            : f.role === "FOLLOWER"
-                            ? "bg-[#F5F0EC] text-[#847062]"
-                            : f.role === "CHILD"
-                            ? "bg-[#86E0B3] text-[#32241B]"
-                            : ""
-                        }`}
-                    >
-                      {f.role === "PARENT" && "부모"}
-                      {f.role === "CHILD" && "자식"}
-                      {f.role === "FOLLOWER" && "팔로워"}
-                    </div>
-                  </div>
-
-                  {/* 인원 */}
-                  <div className="flex items-center gap-2 mb-3 text-[#847062]">
-                    <Users size={15} />
-                    <div className="text-[12px] font-semibold">
-                      {f.member_count}명
-                    </div>
-                  </div>
-
-                  <div className="border-[0.5px] border-[#E7E1DA] mb-3" />
-
-                  {/* 오늘의 메뉴 */}
-                  <div className="text-[12px] text-[#847062] font-semibold">
-                    오늘의 메뉴
-                  </div>
-                  <div className="text-[14px] font-extrabold text-[#F2805A] mb-4">
-                    {f.today_menu ?? "미정"}
-                  </div>
-
-                  <button
-                    className="bg-[#F2805A] text-white rounded-2xl text-[12px] 
-                               font-bold py-2 w-full transition-all duration-150 transform active:scale-95"
-                  >
-                    가족 들어가기
-                  </button>
+              {!loadingFamilies && families.length === 0 && (
+                <div className="text-[12px] text-[#847062]">
+                  아직 참여 중인 가족이 없습니다. 아래에서 가족을 생성하거나 초대 코드를 입력해보세요.
                 </div>
-              ))}
+              )}
+
+              {!loadingFamilies &&
+                families.map((f) => (
+                  <div
+                    key={f.family_id}
+                    className="bg-[#FFFFFF] border border-[#DDDDDD] p-4 rounded-xl w-85"
+                  >
+                    {/* 제목 + 역할 */}
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="font-bold text-[18px]">{f.family_name}</div>
+
+                      <div
+                        className={`rounded-2xl px-2.5 py-1 text-[10px] font-semibold 
+                          ${
+                            f.role === "PARENT"
+                              ? "bg-[#F2805A] text-white"
+                              : f.role === "FOLLOWER"
+                              ? "bg-[#F5F0EC] text-[#847062]"
+                              : f.role === "CHILD"
+                              ? "bg-[#86E0B3] text-[#32241B]"
+                              : ""
+                          }`}
+                      >
+                        {f.role === "PARENT" && "부모"}
+                        {f.role === "CHILD" && "자식"}
+                        {f.role === "FOLLOWER" && "팔로워"}
+                      </div>
+                    </div>
+
+                    {/* 인원 */}
+                    <div className="flex items-center gap-2 mb-3 text-[#847062]">
+                      <Users size={15} />
+                      <div className="text-[12px] font-semibold">
+                        {f.member_count}명
+                      </div>
+                    </div>
+
+                    <div className="border-[0.5px] border-[#E7E1DA] mb-3" />
+
+                    {/* 오늘의 메뉴 */}
+                    <div className="text-[12px] text-[#847062] font-semibold">
+                      오늘의 메뉴
+                    </div>
+                    <div className="text-[14px] font-extrabold text-[#F2805A] mb-4">
+                      {f.today_menu ?? "미정"}
+                    </div>
+
+                    <button
+                      className="bg-[#F2805A] text-white rounded-2xl text-[12px] 
+                                font-bold py-2 w-full transition-all duration-150 transform active:scale-95"
+                    >
+                      가족 들어가기
+                    </button>
+                  </div>
+                ))}
             </div>
           ) : (
             <div className="flex gap-6">

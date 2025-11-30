@@ -40,6 +40,7 @@ export default function LoginPage() {
     console.log("로그인 성공:", data);
 
     // ✅ 로그인 유저 정보 저장
+    localStorage.setItem("isLoggedIn", "true");
     localStorage.setItem("currentUser", JSON.stringify(data));
 
     router.push("/"); // 로그인 후 이동 페이지
