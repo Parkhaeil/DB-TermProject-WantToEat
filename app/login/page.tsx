@@ -17,21 +17,38 @@ export default function LoginPage() {
   const [signupPassword, setSignupPassword] = useState("");
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-    // TODO: 실제 로그인 API 붙이면 여기에서 검증 후 성공 처리
-    console.log("login", { loginEmail, loginPassword });
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: loginEmail,
+        password: loginPassword,
+      }),
+    });
 
-    // ✅ 로그인 성공했다고 가정하고 로그인 상태 저장
-    if (typeof window !== "undefined") {
-      localStorage.setItem("isLoggedIn", "true");
-      // 필요하면 유저 정보도 저장 가능
-      // localStorage.setItem("userNickname", "유민");
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || "로그인 실패");
+      return;
     }
 
-    router.push("/");
-  };
+    console.log("로그인 성공:", data);
+
+    // ✅ 로그인 유저 정보 저장
+    localStorage.setItem("currentUser", JSON.stringify(data));
+
+    router.push("/"); // 로그인 후 이동 페이지
+  } catch (error) {
+    console.error("로그인 에러:", error);
+    alert("서버 연결 실패");
+  }
+};
+
 
   const handleSignupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
