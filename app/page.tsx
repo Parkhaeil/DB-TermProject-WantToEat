@@ -163,7 +163,7 @@ export default function HomePage() {
                 </div>
               )}
 
-              {!loadingFamilies &&
+                {!loadingFamilies &&
                 families.map((f) => (
                   <div
                     key={f.family_id}
@@ -212,6 +212,7 @@ export default function HomePage() {
                     <button
                       className="bg-[#F2805A] text-white rounded-2xl text-[12px] 
                                 font-bold py-2 w-full transition-all duration-150 transform active:scale-95"
+                      onClick={() => router.push(`/family/${f.family_id}`)}
                     >
                       가족 들어가기
                     </button>
