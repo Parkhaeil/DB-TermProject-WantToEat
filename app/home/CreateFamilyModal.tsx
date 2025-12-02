@@ -1,18 +1,86 @@
 "use client";
 
 import { X } from "lucide-react";
-import React from "react";
+import React, { useState } from "react";
 
 interface CreateFamilyModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: (familyName: string, inviteCode: string) => void;
 }
 
 const CreateFamilyModal: React.FC<CreateFamilyModalProps> = ({
   isOpen,
   onClose,
+  onSuccess,
 }) => {
+  const [familyName, setFamilyName] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!familyName.trim()) {
+      setError("가족 이름을 입력해주세요.");
+      return;
+    }
+
+    // localStorage에서 userId 가져오기
+    if (typeof window === "undefined") return;
+    
+    const storedUser = localStorage.getItem("currentUser");
+    if (!storedUser) {
+      setError("로그인이 필요합니다.");
+      return;
+    }
+
+    try {
+      const currentUser = JSON.parse(storedUser);
+      const userId = currentUser.userId;
+
+      if (!userId) {
+        setError("사용자 정보를 찾을 수 없습니다.");
+        return;
+      }
+
+      setIsLoading(true);
+
+      const res = await fetch("/api/families/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          familyName: familyName.trim(),
+          userId: userId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "가족 생성에 실패했습니다.");
+      }
+
+      // 성공 시 콜백 호출
+      if (onSuccess) {
+        onSuccess(data.family.familyName, data.inviteCode);
+      }
+
+      // 폼 초기화 및 모달 닫기
+      setFamilyName("");
+      onClose();
+    } catch (err) {
+      console.error("가족 생성 에러:", err);
+      setError(err instanceof Error ? err.message : "가족 생성에 실패했습니다.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center text-[#32241B]">
@@ -40,13 +108,16 @@ const CreateFamilyModal: React.FC<CreateFamilyModalProps> = ({
           우리 가족만의 메뉴판을 시작하세요.
         </p>
 
-        {/* 폼 (틀만) */}
+        {/* 에러 메시지 */}
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[12px]">
+            {error}
+          </div>
+        )}
+
+        {/* 폼 */}
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            // TODO: 실제 생성 로직 연결 예정
-            onClose();
-          }}
+          onSubmit={handleSubmit}
           className="flex flex-col gap-3"
         >
           {/* 가족 이름 */}
@@ -56,8 +127,11 @@ const CreateFamilyModal: React.FC<CreateFamilyModalProps> = ({
             </label>
             <input
               type="text"
+              value={familyName}
+              onChange={(e) => setFamilyName(e.target.value)}
               placeholder="예) 이유민네 메뉴판"
               className="w-full rounded-xl border border-[#E7E1DA] bg-[#FFFFFF] px-3 py-2 text-[12px] focus:outline-none focus:border-[#F2805A]"
+              disabled={isLoading}
             />
           </div>
 
@@ -89,10 +163,11 @@ const CreateFamilyModal: React.FC<CreateFamilyModalProps> = ({
             </button>
             <button
               type="submit"
+              disabled={isLoading}
               className="px-4 py-2 rounded-xl text-[12px] font-bold bg-[#F2805A] text-white
-                         transition-all duration-150 transform active:scale-95"
+                         transition-all duration-150 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              가족 생성하기
+              {isLoading ? "생성 중..." : "가족 생성하기"}
             </button>
           </div>
         </form>
