@@ -1,6 +1,6 @@
 // app/api/families/route.ts
 import { NextResponse } from "next/server";
-import pool from "@/lib/db";
+import { pool } from "@/lib/db";
 
 // GET /api/families?userId=1
 export async function GET(req: Request) {
