@@ -13,8 +13,75 @@ const InviteCodeModal: React.FC<InviteCodeModalProps> = ({
   onClose,
 }) => {
   const [code, setCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMessage(null);
+
+    if (!code.trim()) {
+      setError("초대 코드를 입력해주세요.");
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+
+    const storedUser = localStorage.getItem("currentUser");
+    if (!storedUser) {
+      setError("로그인이 필요합니다.");
+      return;
+    }
+
+    try {
+      const currentUser = JSON.parse(storedUser);
+      const userId = currentUser.userId;
+
+      if (!userId) {
+        setError("사용자 정보를 찾을 수 없습니다.");
+        return;
+      }
+
+      setIsLoading(true);
+
+      const res = await fetch("/api/families/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code: code.trim(),
+          userId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "가족 참여에 실패했습니다.");
+      }
+
+      // 성공
+      setSuccessMessage("가족에 성공적으로 참여했습니다!");
+
+      // 가족 목록 새로고침을 위해 전체 페이지 리로드
+      setTimeout(() => {
+        onClose();
+        if (typeof window !== "undefined") {
+          window.location.reload();
+        }
+      }, 800);
+    } catch (err) {
+      console.error("가족 참여 에러:", err);
+      setError(err instanceof Error ? err.message : "가족 참여에 실패했습니다.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center text-[#32241B]">
@@ -42,13 +109,23 @@ const InviteCodeModal: React.FC<InviteCodeModalProps> = ({
           초대코드를 입력하여 가족 메뉴판에 참여하세요.
         </p>
 
-        {/* 폼 (틀만) */}
+        {/* 에러 메시지 */}
+        {error && (
+          <div className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[12px]">
+            {error}
+          </div>
+        )}
+
+        {/* 성공 메시지 */}
+        {successMessage && (
+          <div className="mb-3 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-[12px]">
+            {successMessage}
+          </div>
+        )}
+
+        {/* 폼 */}
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            // TODO: 초대 코드 검증/참여 로직 연결
-            onClose();
-          }}
+          onSubmit={handleSubmit}
           className="flex flex-col gap-3"
         >
           {/* 초대 코드 입력 */}
@@ -63,24 +140,26 @@ const InviteCodeModal: React.FC<InviteCodeModalProps> = ({
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="예) FAM2024XYZ"
                 className="w-6/7 rounded-xl border border-[#E7E1DA] bg-[#FFFFFF] px-3 py-2 text-[12px] focus:outline-none focus:border-[#F2805A]"
+                disabled={isLoading}
               />
               <button
-                type="button"
+                type="submit"
+                disabled={isLoading}
                 className="w-1/7 px-4 py-2 rounded-xl text-[12px] font-bold bg-[#F2805A] text-white
-                          transition-all duration-150 transform active:scale-95"
+                          transition-all duration-150 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 확인
               </button>
             </div>
           </div>
 
-          {/* 안내 박스 – CreateFamilyModal 스타일 맞춤 (텍스트는 네가 쓴 그대로) */}
+          {/* 안내 박스 – CreateFamilyModal 스타일 맞춤 */}
           <div className="bg-[#F5F0EC] p-4 rounded-2xl mb-10">
             <div className="text-[14px] font-bold mb-2">💡 초대코드</div>
-            <div className="text-[12px]">
+            <div className="text-[12px">
               가족 메뉴판의 구성원이 공유한 초대코드를 입력하세요.
             </div>
-            <div className="text-[12px]">
+            <div className="text-[12px">
               초대코드는 가족 메뉴판 내에서 확인할 수 있어요.
             </div>
           </div>
@@ -92,15 +171,17 @@ const InviteCodeModal: React.FC<InviteCodeModalProps> = ({
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-[12px] border border-[#E7E1DA] bg-[#FFFFFF]
                          transition-all duration-150 transform active:scale-95"
+              disabled={isLoading}
             >
               취소
             </button>
             <button
               type="submit"
+              disabled={isLoading}
               className="px-4 py-2 rounded-xl text-[12px] font-bold bg-[#F2805A] text-white
-                         transition-all duration-150 transform active:scale-95"
+                         transition-all duration-150 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              참여하기
+              {isLoading ? "참여 중..." : "참여하기"}
             </button>
           </div>
         </form>
