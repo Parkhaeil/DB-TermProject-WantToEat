@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { UtensilsCrossed, LogOut, Users, Plus, Key } from "lucide-react";
 import CreateFamilyModal from "./home/CreateFamilyModal";
 import InviteCodeModal from "./home/InviteCodeModal";
+import InviteCodeDisplayModal from "./family/InviteCodeModal";
 
 type FamilyCard = {
   family_id: number;
@@ -30,6 +31,9 @@ export default function HomePage() {
   // 모달 상태
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isInviteCodeDisplayModalOpen, setIsInviteCodeDisplayModalOpen] = useState(false);
+  const [createdFamilyName, setCreatedFamilyName] = useState("");
+  const [createdInviteCode, setCreatedInviteCode] = useState("");
 
    // 🔹 첫 진입 시 localStorage 보고 로그인 상태 & 유저 복원 + 가족 목록 불러오기
   useEffect(() => {
@@ -309,12 +313,30 @@ export default function HomePage() {
       <CreateFamilyModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={async (familyName, inviteCode) => {
+          setCreatedFamilyName(familyName);
+          setCreatedInviteCode(inviteCode);
+          setIsInviteCodeDisplayModalOpen(true);
+          
+          // 가족 목록 새로고침
+          if (currentUser) {
+            await fetchFamilies(currentUser.userId);
+          }
+        }}
       />
 
       {/* 초대 코드 입력 모달 */}
       <InviteCodeModal
         isOpen={isInviteModalOpen}
         onClose={() => setIsInviteModalOpen(false)}
+      />
+
+      {/* 초대 코드 표시 모달 */}
+      <InviteCodeDisplayModal
+        isOpen={isInviteCodeDisplayModalOpen}
+        onClose={() => setIsInviteCodeDisplayModalOpen(false)}
+        familyName={createdFamilyName}
+        inviteCode={createdInviteCode}
       />
     </div>
   );
