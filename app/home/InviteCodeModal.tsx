@@ -156,10 +156,10 @@ const InviteCodeModal: React.FC<InviteCodeModalProps> = ({
           {/* 안내 박스 – CreateFamilyModal 스타일 맞춤 */}
           <div className="bg-[#F5F0EC] p-4 rounded-2xl mb-10">
             <div className="text-[14px] font-bold mb-2">💡 초대코드</div>
-            <div className="text-[12px">
+            <div className="text-[12px]">
               가족 메뉴판의 구성원이 공유한 초대코드를 입력하세요.
             </div>
-            <div className="text-[12px">
+            <div className="text-[12px]">
               초대코드는 가족 메뉴판 내에서 확인할 수 있어요.
             </div>
           </div>
