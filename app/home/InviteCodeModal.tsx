@@ -138,7 +138,7 @@ const InviteCodeModal: React.FC<InviteCodeModalProps> = ({
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder="예) FAM2024XYZ"
+                placeholder="예) FAMXXXXXXX"
                 className="w-6/7 rounded-xl border border-[#E7E1DA] bg-[#FFFFFF] px-3 py-2 text-[12px] focus:outline-none focus:border-[#F2805A]"
                 disabled={isLoading}
               />
