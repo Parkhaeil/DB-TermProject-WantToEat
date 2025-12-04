@@ -152,14 +152,16 @@ export default function FamilyDetailPage() {
             <Key size={15} />
             초대코드
           </button>
-          <button
-            onClick={() => setIsMemberModalOpen(true)}
-            className="flex gap-1 items-center bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
-                        text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
-          >
-            <Settings size={15} />
-            가족 관리
-          </button>
+          {currentFamilyRole === "PARENT" && (
+            <button
+              onClick={() => setIsMemberModalOpen(true)}
+              className="flex gap-1 items-center bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
+                          text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
+            >
+              <Settings size={15} />
+              가족 관리
+            </button>
+          )}
         </div>
       </div>
 
