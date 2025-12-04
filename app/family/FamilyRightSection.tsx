@@ -1,7 +1,8 @@
 // app/family/FamilyRightSection.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import {
   BarChart3,
   ChevronRight,
@@ -53,10 +54,27 @@ const todayMenuDummy: TodayMenu = {
 };
 
 // 재료 태그 컴포넌트
-function FridgeTag({ label }: { label: string }) {
+function FridgeTag({
+  label,
+  deletable,
+  onDelete,
+}: {
+  label: string;
+  deletable?: boolean;
+  onDelete?: () => void;
+}) {
   return (
-    <span className="px-2 py-1 rounded-full bg-white border border-[#E7E1DA] text-[10px] font-semibold">
-      {label}
+    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white border border-[#E7E1DA] text-[10px] font-semibold">
+      <span>{label}</span>
+      {deletable && onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          className="ml-0.5 text-[9px] text-[#C2B5A8] hover:text-[#A0615A]"
+        >
+          ×
+        </button>
+      )}
     </span>
   );
 }
@@ -186,35 +204,15 @@ const storageMeta: Record<
 };
 
 export default function FamilyRightSection() {
+  const params = useParams();
+  const familyIdParam = params?.familyId;
+
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
-  // 냉장고 더미 (state로 관리해서 추가 반영)
-  const [freezerItems, setFreezerItems] = useState<string[]>([
-    "만두",
-    "소고기",
-    "냉동 새우",
-    "아이스크림",
-  ]);
-  const [fridgeItems, setFridgeItems] = useState<string[]>([
-    "김치",
-    "계란",
-    "두부",
-    "양파",
-    "돼지고기",
-    "우유",
-    "당근",
-    "치즈",
-  ]);
-  const [roomItems, setRoomItems] = useState<string[]>([
-    "김치",
-    "계란",
-    "두부",
-    "양파",
-    "돼지고기",
-    "우유",
-    "당근",
-    "치즈",
-  ]);
+  // 냉장고 아이템 (서버 + 클라이언트 추가)
+  const [freezerItems, setFreezerItems] = useState<string[]>([]);
+  const [fridgeItems, setFridgeItems] = useState<string[]>([]);
+  const [roomItems, setRoomItems] = useState<string[]>([]);
 
   // 재료 추가 팝오버 상태
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -223,22 +221,150 @@ export default function FamilyRightSection() {
     useState<SimpleStorage>("FREEZER");
   const [isStorageDropdownOpen, setIsStorageDropdownOpen] = useState(false);
 
-  const handleAddIngredient = () => {
+  const reloadFridge = async () => {
+    if (!familyIdParam) return;
+    if (typeof window === "undefined") return;
+
+    try {
+      const storedUser = localStorage.getItem("currentUser");
+      const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+
+      if (!isLoggedIn || !storedUser) {
+        console.warn("로그인 정보가 없어 냉장고를 불러올 수 없습니다.");
+        return;
+      }
+
+      const currentUser = JSON.parse(storedUser);
+      const userId = currentUser.userId;
+      const familyIdNum = Number(familyIdParam);
+
+      const res = await fetch(
+        `/api/fridge?familyId=${familyIdNum}&userId=${userId}`,
+        {
+          cache: "no-store",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("냉장고 조회 에러:", data);
+        return;
+      }
+
+      setFreezerItems(data.freezer ?? []);
+      setFridgeItems(data.fridge ?? []);
+      setRoomItems(data.room ?? []);
+    } catch (err) {
+      console.error("냉장고 정보를 불러오는 중 오류:", err);
+    }
+  };
+
+  // 초기 냉장고 데이터 로딩
+  useEffect(() => {
+    reloadFridge();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [familyIdParam]);
+
+  const handleAddIngredient = async () => {
     const name = newName.trim();
     if (!name) return;
 
-    if (selectedStorage === "FREEZER") {
-      setFreezerItems((prev) => [...prev, name]);
-    } else if (selectedStorage === "FRIDGE") {
-      setFridgeItems((prev) => [...prev, name]);
-    } else {
-      setRoomItems((prev) => [...prev, name]);
+    if (!familyIdParam) return;
+    if (typeof window === "undefined") return;
+
+    try {
+      const storedUser = localStorage.getItem("currentUser");
+      const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+
+      if (!isLoggedIn || !storedUser) {
+        console.warn("로그인 정보가 없어 재료를 추가할 수 없습니다.");
+        return;
+      }
+
+      const currentUser = JSON.parse(storedUser);
+      const userId = currentUser.userId;
+      const familyIdNum = Number(familyIdParam);
+
+      const res = await fetch("/api/fridge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          familyId: familyIdNum,
+          userId,
+          ingredientName: name,
+          storageType: selectedStorage,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("재료 추가 에러:", data);
+        return;
+      }
+
+      setFreezerItems(data.freezer ?? []);
+      setFridgeItems(data.fridge ?? []);
+      setRoomItems(data.room ?? []);
+    } catch (err) {
+      console.error("재료 추가 중 오류:", err);
     }
 
     setNewName("");
     setSelectedStorage("FREEZER");
     setIsStorageDropdownOpen(false);
     setIsAddOpen(false);
+  };
+
+  const handleDeleteIngredient = async (
+    storage: SimpleStorage,
+    name: string
+  ) => {
+    if (!familyIdParam) return;
+    if (typeof window === "undefined") return;
+
+    try {
+      const storedUser = localStorage.getItem("currentUser");
+      const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+
+      if (!isLoggedIn || !storedUser) {
+        console.warn("로그인 정보가 없어 재료를 삭제할 수 없습니다.");
+        return;
+      }
+
+      const currentUser = JSON.parse(storedUser);
+      const userId = currentUser.userId;
+      const familyIdNum = Number(familyIdParam);
+
+      const res = await fetch("/api/fridge", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          familyId: familyIdNum,
+          userId,
+          ingredientName: name,
+          storageType: storage,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("재료 삭제 에러:", data);
+        return;
+      }
+
+      setFreezerItems(data.freezer ?? []);
+      setFridgeItems(data.fridge ?? []);
+      setRoomItems(data.room ?? []);
+    } catch (err) {
+      console.error("재료 삭제 중 오류:", err);
+    }
   };
 
   const currentMeta = storageMeta[selectedStorage];
@@ -304,9 +430,20 @@ export default function FamilyRightSection() {
             </div>
 
             <div className="px-4 pb-3 flex flex-wrap gap-1.5">
-              {freezerItems.map((name) => (
-                <FridgeTag key={name} label={name} />
-              ))}
+              {freezerItems.length === 0 ? (
+                <span className="text-[11px] text-[#8493A8]">
+                  아직 등록된 재료가 없어요.
+                </span>
+              ) : (
+                freezerItems.map((name) => (
+                  <FridgeTag
+                    key={name}
+                    label={name}
+                    deletable
+                    onDelete={() => handleDeleteIngredient("FREEZER", name)}
+                  />
+                ))
+              )}
             </div>
 
             <div className="h-[1px] w-full bg-[#E3EFFB]" />
@@ -325,9 +462,20 @@ export default function FamilyRightSection() {
             </div>
 
             <div className="px-4 pb-4 flex flex-wrap gap-1.5">
-              {fridgeItems.map((name) => (
-                <FridgeTag key={name} label={name} />
-              ))}
+              {fridgeItems.length === 0 ? (
+                <span className="text-[11px] text-[#8493A8]">
+                  아직 등록된 재료가 없어요.
+                </span>
+              ) : (
+                fridgeItems.map((name) => (
+                  <FridgeTag
+                    key={name}
+                    label={name}
+                    deletable
+                    onDelete={() => handleDeleteIngredient("FRIDGE", name)}
+                  />
+                ))
+              )}
             </div>
           </div>
 
@@ -343,9 +491,20 @@ export default function FamilyRightSection() {
             </div>
 
             <div className="px-4 pb-4 flex flex-wrap gap-1.5">
-              {roomItems.map((name) => (
-                <FridgeTag key={name} label={name} />
-              ))}
+              {roomItems.length === 0 ? (
+                <span className="text-[11px] text-[#B29B82]">
+                  아직 등록된 재료가 없어요.
+                </span>
+              ) : (
+                roomItems.map((name) => (
+                  <FridgeTag
+                    key={name}
+                    label={name}
+                    deletable
+                    onDelete={() => handleDeleteIngredient("ROOM", name)}
+                  />
+                ))
+              )}
             </div>
           </div>
 
