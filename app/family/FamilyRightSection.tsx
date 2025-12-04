@@ -617,6 +617,15 @@ export default function FamilyRightSection() {
             </div>
           </div>
         )}
+        {/* 가족 탈퇴하기 버튼 */}
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            className="text-[12px] text-red-500 underline bg-transparent border-none outline-none"
+          >
+            가족 탈퇴하기
+          </button>
+        </div>
       </div>
 
       {/* 통계 모달 */}
