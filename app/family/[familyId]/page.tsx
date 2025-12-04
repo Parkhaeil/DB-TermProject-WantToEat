@@ -6,11 +6,23 @@ import MemberEditModal, { FamilyMember } from "../MemberEditModal";
 import FamilyLeftSection from "../FamilyLeftSection";
 import FamilyRightSection from "../FamilyRightSection";
 
+import AddMenuModal from "../AddMenuModal";
+
 import { useRouter, useParams } from "next/navigation";
 import { Users, ArrowLeft, Key, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type Role = "PARENT" | "CHILD" | "FOLLOWER";
+
+type SourceType = "HOME" | "EAT_OUT";
+type MenuStatus = "POSSIBLE" | "WISH";
+type SimpleStorage = "FREEZER" | "FRIDGE" | "ROOM";
+
+type CurrentUser = {
+  userId: number;
+  email: string;
+  nickname: string;
+};
 
 interface FamilyHeaderInfo {
   family_id: number;
@@ -46,9 +58,13 @@ export default function FamilyDetailPage() {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
 
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false); // ⭐ 메뉴 추가 모달
+
   const [familyInfo, setFamilyInfo] = useState<FamilyHeaderInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null); // ⭐ 현재 유저
 
   // 임시 더미 구성원 (나중에 실제 API 연결)
   const [members, setMembers] = useState<FamilyMember[]>([
@@ -76,8 +92,9 @@ export default function FamilyDetailPage() {
           return;
         }
 
-        const currentUser = JSON.parse(storedUser);
-        const userId = currentUser.userId;
+        const currentUserParsed = JSON.parse(storedUser);
+        setCurrentUser(currentUserParsed); // ⭐ currentUser 저장
+        const userId = currentUserParsed.userId;
 
         const res = await fetch(`/api/families?userId=${userId}`, {
           cache: "no-store",
@@ -116,6 +133,56 @@ export default function FamilyDetailPage() {
   const currentFamilyRole: Role = familyInfo?.role ?? "FOLLOWER";
   const memberCount = familyInfo?.member_count ?? members.length;
 
+  // ⭐ AddMenuModal이 호출할 핸들러
+  const handleAddMenuSubmit = async (data: {
+    menuName: string;
+    sourceType: SourceType;
+    status?: MenuStatus;
+    selectedIngredients?: { storage: SimpleStorage; name: string }[];
+    toBuy?: string[];
+  }) => {
+    if (!currentUser) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+
+    const familyIdNum = Number(familyIdParam);
+    if (Number.isNaN(familyIdNum)) {
+      alert("유효하지 않은 가족 ID입니다.");
+      return;
+    }
+
+    try {
+      // 실제 라우트 위치: app/family/[familyId]/menus/route.ts -> /family/[familyId]/menus
+      const res = await fetch(`/family/${familyIdNum}/menus`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.userId,
+          menuName: data.menuName,
+          sourceType: data.sourceType,
+          status: data.status ?? "POSSIBLE",
+          selectedIngredients: data.selectedIngredients ?? [],
+          toBuy: data.toBuy ?? [],
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error("메뉴 추가 실패:", json);
+        alert(json.error || "메뉴 추가 실패");
+        return;
+      }
+
+      console.log("메뉴 추가 성공:", json);
+      // TODO: FamilyRightSection에서 메뉴 목록 fetch 함수를 분리해뒀다면 여기서 호출
+    } catch (err) {
+      console.error("메뉴 추가 요청 에러:", err);
+      alert("서버 연결 실패");
+    }
+  };
+
   return (
     <div className="flex flex-col w-screen min-h-screen bg-[#FCFAF8] text-[#32241B]">
       {/* 헤더 */}
@@ -152,16 +219,23 @@ export default function FamilyDetailPage() {
             <Key size={15} />
             초대코드
           </button>
-          {currentFamilyRole === "PARENT" && (
-            <button
-              onClick={() => setIsMemberModalOpen(true)}
-              className="flex gap-1 items-center bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
-                          text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
-            >
-              <Settings size={15} />
-              가족 관리
-            </button>
-          )}
+          <button
+            onClick={() => setIsMemberModalOpen(true)}
+            className="flex gap-1 items-center bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
+                        text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
+          >
+            <Settings size={15} />
+            가족 관리
+          </button>
+          {/* ⭐ 테스트용 메뉴 추가 버튼 */}
+          <button
+            onClick={() => setIsAddMenuOpen(true)}
+            className="flex gap-1 items-center bg-[#F2805A] border border-[#E9E4DE] px-4 py-2 rounded-xl 
+                        text-[12px] font-semibold text-white transition-all duration-150 transform active:scale-95"
+          >
+            메뉴 추가
+          </button>
+
         </div>
       </div>
 
@@ -203,8 +277,15 @@ export default function FamilyDetailPage() {
           setMembers((prev) => prev.filter((m) => m.id !== id))
         }
       />
+
+      {/* ⭐ 메뉴 추가 모달 */}
+      <AddMenuModal
+        isOpen={isAddMenuOpen}
+        onClose={() => setIsAddMenuOpen(false)}
+        familyName={familyName}
+        simpleMode={false}
+        onSubmit={handleAddMenuSubmit}
+      />
     </div>
   );
 }
-
-

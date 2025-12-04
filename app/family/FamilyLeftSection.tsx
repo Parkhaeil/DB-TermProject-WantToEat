@@ -11,6 +11,7 @@ import {
   Heart,
 } from "lucide-react";
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import type { ChangeEvent } from "react";
 import AddMenuModal from "./AddMenuModal";
 import SelectFamilyModal from "./SelectFamilyModal";
@@ -288,6 +289,9 @@ function MenuCard({
    =========================== */
 
 export default function FamilyLeftSection() {
+  const params = useParams();
+  const familyIdParam = params?.familyId;
+
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [sortType, setSortType] = useState<"latest" | "popular">("latest");
@@ -302,6 +306,105 @@ export default function FamilyLeftSection() {
 
   // ✅ 메뉴를 state로 관리
   const [menus, setMenus] = useState<MenuItem[]>(dummyMenus);
+
+  const handleAddMenuToServer = async (data: {
+    menuName: string;
+    sourceType: "HOME" | "EAT_OUT";
+    status?: MenuStatus;
+    selectedIngredients?: { storage: StorageType; name: string }[];
+    toBuy?: string[];
+  }) => {
+    if (!familyIdParam) {
+      alert("가족 ID를 찾을 수 없습니다. 상단 페이지에서 다시 진입해주세요.");
+      return;
+    }
+
+    const storedUser =
+      typeof window !== "undefined"
+        ? localStorage.getItem("currentUser")
+        : null;
+    const isLoggedIn =
+      typeof window !== "undefined" &&
+      localStorage.getItem("isLoggedIn") === "true";
+
+    if (!isLoggedIn || !storedUser) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+
+    let currentUser: { userId: number; email: string; nickname: string };
+    try {
+      currentUser = JSON.parse(storedUser);
+    } catch (e) {
+      console.error("currentUser 파싱 에러:", e);
+      alert("로그인 정보를 불러오는 중 오류가 발생했습니다.");
+      return;
+    }
+
+    const familyIdNum = Number(familyIdParam);
+    if (Number.isNaN(familyIdNum)) {
+      alert("유효하지 않은 가족 ID입니다.");
+      return;
+    }
+
+    try {
+      // 실제 라우트 위치: app/family/[familyId]/menus/route.ts -> /family/[familyId]/menus
+      const res = await fetch(`/family/${familyIdNum}/menus`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.userId,
+          menuName: data.menuName,
+          sourceType: data.sourceType,
+          status: data.status ?? "POSSIBLE",
+          selectedIngredients: data.selectedIngredients ?? [],
+          toBuy: data.toBuy ?? [],
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error("메뉴 추가 실패:", json);
+        alert(json.error || "메뉴 추가 실패");
+        return;
+      }
+
+      console.log("메뉴 추가 성공:", json);
+
+      const maxId = menus.reduce(
+        (acc, m) => (m.menu_id > acc ? m.menu_id : acc),
+        0
+      );
+
+      const newMenu: MenuItem = {
+        menu_id: maxId + 1,
+        menu_name: data.menuName,
+        status: data.status ?? "POSSIBLE",
+        author: "나", // TODO: 실제 사용자 닉네임으로 교체 가능
+        roleLabel: "부모", // TODO: 실제 역할 정보로 교체 가능
+        ingredients: [
+          ...(data.selectedIngredients || []).map((ing) => ({
+            ingredient_id: Math.random(),
+            ingredient_name: ing.name,
+            storage_type: ing.storage,
+          })),
+          ...(data.toBuy || []).map((name) => ({
+            ingredient_id: Math.random(),
+            ingredient_name: name,
+            storage_type: "NEED" as const,
+          })),
+        ],
+        likes: 0,
+        sourceType: data.sourceType,
+      };
+
+      setMenus((prev) => [...prev, newMenu]);
+    } catch (err) {
+      console.error("메뉴 추가 요청 에러:", err);
+      alert("서버 연결 실패");
+    }
+  };
 
   // 더미 가족 목록 (나중에 실제 데이터로 교체)
   const dummyFamilies = [
@@ -597,16 +700,16 @@ export default function FamilyLeftSection() {
         simpleMode={!!copyingMenu}
         sourceMenuName={copyingMenu?.menu_name || ""}
         sourceMenuType={copyingMenu?.sourceType || "HOME"}
-        onSubmit={(data) => {
+        onSubmit={async (data) => {
           if (editingMenu) {
-            // 수정 모드: 기존 메뉴 업데이트
+            // TODO: 수정 모드도 나중에 서버 API와 연동
             setMenus((prev) =>
               prev.map((m) =>
                 m.menu_id === editingMenu.menu_id
                   ? {
                       ...m,
                       menu_name: data.menuName,
-                      status: data.status!,
+                      status: data.status ?? m.status,
                       ingredients: [
                         ...(data.selectedIngredients || []).map((ing) => ({
                           ingredient_id: Math.random(),
@@ -623,55 +726,11 @@ export default function FamilyLeftSection() {
                   : m
               )
             );
-          } else if (copyingMenu) {
-            // 간소화 모드: 다른 가족 메뉴를 내 가족 메뉴로 추가
-            const maxId = menus.reduce(
-              (acc, m) => (m.menu_id > acc ? m.menu_id : acc),
-              0
-            );
-            const newMenu: MenuItem = {
-              menu_id: maxId + 1,
-              menu_name: data.menuName,
-              status: "POSSIBLE", // 기본값
-              author: "이유민", // 나중에 실제 사용자 정보로 교체
-              roleLabel: "부모", // 나중에 실제 역할 정보로 교체
-              ingredients: [], // 간소화 모드에서는 재료 없음
-              likes: 0,
-              sourceType: data.sourceType, // 집밥/외식 정보 저장
-            };
-            setMenus((prev) => [...prev, newMenu]);
-            console.log(
-              `'${data.menuName}' 메뉴를 ${selectedFamily?.family_name}에 추가했습니다!`
-            );
           } else {
-            // 추가 모드: 새 메뉴 추가
-            const maxId = menus.reduce(
-              (acc, m) => (m.menu_id > acc ? m.menu_id : acc),
-              0
-            );
-            const newMenu: MenuItem = {
-              menu_id: maxId + 1,
-              menu_name: data.menuName,
-              status: data.status!,
-              author: "이유민", // 나중에 실제 사용자 정보로 교체
-              roleLabel: "부모", // 나중에 실제 역할 정보로 교체
-              ingredients: [
-                ...(data.selectedIngredients || []).map((ing) => ({
-                  ingredient_id: Math.random(),
-                  ingredient_name: ing.name,
-                  storage_type: ing.storage,
-                })),
-                ...(data.toBuy || []).map((name) => ({
-                  ingredient_id: Math.random(),
-                  ingredient_name: name,
-                  storage_type: "NEED" as const,
-                })),
-              ],
-              likes: 0,
-              sourceType: data.sourceType, // 집밥/외식 정보 저장
-            };
-            setMenus((prev) => [...prev, newMenu]);
+            // 추가 모드 및 복사 모드는 공통으로 서버에 메뉴 생성
+            await handleAddMenuToServer(data);
           }
+
           handleCloseModal();
         }}
       />
