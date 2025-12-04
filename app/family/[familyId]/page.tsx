@@ -183,7 +183,7 @@ export default function FamilyDetailPage() {
         isOpen={isInviteModalOpen}
         onClose={() => setIsInviteModalOpen(false)}
         familyName={familyName}
-        inviteCode="FAM2024XYZ"
+        familyId={Number(familyIdParam)}
       />
 
       {/* 가족 구성원 관리 모달 */}
