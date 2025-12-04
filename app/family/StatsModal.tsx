@@ -1,7 +1,8 @@
 // app/family/StatsModal.tsx
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { X, BarChart3 } from "lucide-react";
 
 interface StatsModalProps {
@@ -9,40 +10,73 @@ interface StatsModalProps {
   onClose: () => void;
 }
 
-// 더미 데이터 (나중에 실제 API/쿼리 결과로 교체)
-const mockTopLikedMenus = [
-  { rank: 1, name: "김치찌개", likes: 15 },
-  { rank: 2, name: "연어덮밥", likes: 12 },
-  { rank: 3, name: "된장찌개", likes: 9 },
-];
-
-const mockMostEatenMenu = {
-  name: "된장찌개",
-  times: 7,
+type StatsApiResponse = {
+  topMenus: { menu_name: string; cnt: string }[];
+  homePercent: number;
+  eatOutPercent: number;
+  topIngredients: { ingredient_name: string; cnt: string }[];
+  leastIngredients: { ingredient_name: string; cnt: string }[];
 };
 
-// 집밥 / 배달 비율
-const homePercent = 68;
-const eatOutPercent = 32;
-
-// 식재료 사용량 더미
-const topUsedIngredients = [
-  { name: "양파", count: 12 },
-  { name: "대파", count: 10 },
-  { name: "계란", count: 9 },
-  { name: "두부", count: 7 },
-  { name: "김치", count: 6 },
-];
-
-const leastUsedIngredients = [
-  { name: "파프리카", count: 1 },
-  { name: "브로콜리", count: 1 },
-  { name: "슬라이스 치즈", count: 2 },
-  { name: "베이컨", count: 2 },
-  { name: "버터", count: 3 },
-];
-
 const StatsModal: React.FC<StatsModalProps> = ({ isOpen, onClose }) => {
+  const params = useParams();
+  const familyIdParam = params?.familyId;
+
+  const [stats, setStats] = useState<StatsApiResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!familyIdParam) return;
+    if (typeof window === "undefined") return;
+
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const storedUser = localStorage.getItem("currentUser");
+        const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+        if (!isLoggedIn || !storedUser) {
+          setError("로그인이 필요합니다.");
+          return;
+        }
+
+        const currentUser = JSON.parse(storedUser);
+        const userId = currentUser.userId;
+        const familyIdNum = Number(familyIdParam);
+
+        const res = await fetch(
+          `/api/stats?familyId=${familyIdNum}&userId=${userId}`,
+          { cache: "no-store" }
+        );
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("통계 조회 에러:", data);
+          setError(data.error || "통계를 불러오지 못했습니다.");
+          return;
+        }
+
+        setStats(data as StatsApiResponse);
+      } catch (e) {
+        console.error("통계 조회 중 오류:", e);
+        setError("통계를 불러오는 중 오류가 발생했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [isOpen, familyIdParam]);
+
+  const topMenus = stats?.topMenus ?? [];
+  const topIngredients = stats?.topIngredients ?? [];
+  const leastIngredients = stats?.leastIngredients ?? [];
+  const homePercent = stats?.homePercent ?? 0;
+  const eatOutPercent = stats?.eatOutPercent ?? 0;
+
   if (!isOpen) return null;
 
   return (
@@ -76,56 +110,54 @@ const StatsModal: React.FC<StatsModalProps> = ({ isOpen, onClose }) => {
         <div className="flex flex-col gap-4 text-[12px] text-[#5B4636]">
           {/* 좋아요 통계 */}
           <div className="rounded-2xl bg-[#FFF7E0] px-4 py-3">
-            <div className="font-bold mb-1.5">🍽️ 가족들이 제일 좋아하는 메뉴</div>
+            <div className="font-bold mb-1.5">📅 이번 달에 가장 많이 먹은 메뉴</div>
             <div className="text-[12px] mb-2">
-              <span className="font-semibold">좋아요 개수</span>를 기준으로
-              가장 사랑받은 메뉴를 보여줘요.
+              이번 달 <span className="font-semibold">식사 기록 횟수</span>를
+              기준으로 많이 먹은 메뉴를 보여줘요.
             </div>
-            <ul className="space-y-1.5">
-              {mockTopLikedMenus.map((m) => (
-                <li
-                  key={m.rank}
-                  className="flex items-center justify-between text-[12px]"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-[#F2805A]/10 text-[#F2805A] text-[11px] flex items-center justify-center font-bold">
-                      {m.rank}
-                    </span>
-                    <span>{m.name}</span>
-                  </div>
-                  <span className="text-[11px] text-[#A26A4F]">
-                    ♥ {m.likes}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {loading && (
+              <div className="text-[12px] text-[#847062]">통계를 불러오는 중...</div>
+            )}
+            {error && !loading && (
+              <div className="text-[12px] text-red-500">{error}</div>
+            )}
+            {!loading && !error && (
+              <ul className="space-y-1.5">
+                {topMenus.length === 0 ? (
+                  <li className="text-[12px] text-[#847062]">
+                    아직 이번 달 식사 기록이 없어요.
+                  </li>
+                ) : (
+                  topMenus.map((m, idx) => (
+                    <li
+                      key={`${m.menu_name}-${idx}`}
+                      className="flex items-center justify-between text-[12px]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-[#F2805A]/10 text-[#F2805A] text-[11px] flex items-center justify-center font-bold">
+                          {idx + 1}
+                        </span>
+                        <span>{m.menu_name}</span>
+                      </div>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
           </div>
 
-          {/* 이번달 최다 메뉴 + 배달/집밥 비율 */}
+          {/* 배달/집밥 비율 */}
           <div className="rounded-2xl bg-[#FCFAF8] px-4 py-3 flex flex-col gap-3">
-            {/* 이번 달 최다 메뉴 */}
             <div>
-              <div className="font-bold mb-1">📅 이번 달에 제일 많이 먹은 메뉴</div>
-              <div className="text-[12px] mb-1">
-                이번 달 식사 기록 기준,{" "}
-                <span className="font-semibold">{mockMostEatenMenu.name}</span>을
-                {` 총 ${mockMostEatenMenu.times}번`} 먹었어요.
-              </div>
-            </div>
-
-            <div className="h-[1px] w-full bg-[#F0E6DD]" />
-
-            {/* 배달/집밥 비율 - 한 줄 + 양 끝 수치 + 두 바 */}
-            <div>
-              <div className="font-bold mb-1">🏠 배달음식 / 집밥 비율</div>
+              <div className="font-bold mb-1">🏠 집밥 / 배달 비율</div>
               <div className="text-[11px] text-[#8A6A4D] mb-2">
-                이번 달 식사 기록 기준, 집밥 {homePercent}%, 배달 {eatOutPercent}%예요.
+                이번 달 식사 기록 기준으로 집밥, 배달 음식 비율을 보여드려요.
               </div>
 
               <div className="w-full flex items-center gap-3">
                 {/* 집밥 퍼센트 (왼쪽) */}
                 <span className="text-[11px] font-semibold text-[#C45A2A] whitespace-nowrap">
-                  {homePercent}%
+                  집밥 {homePercent.toFixed(0)}%
                 </span>
 
                 {/* 두 색상이 이어지는 바 */}
@@ -144,7 +176,7 @@ const StatsModal: React.FC<StatsModalProps> = ({ isOpen, onClose }) => {
 
                 {/* 배달 퍼센트 (오른쪽) */}
                 <span className="text-[11px] font-semibold text-[#2F7A9F] whitespace-nowrap">
-                  {eatOutPercent}%
+                  배달 {eatOutPercent.toFixed(0)}%
                 </span>
               </div>
             </div>
@@ -154,8 +186,9 @@ const StatsModal: React.FC<StatsModalProps> = ({ isOpen, onClose }) => {
           <div className="rounded-2xl bg-[#F5F0EC] px-4 py-3 flex flex-col gap-3">
             <div className="font-bold">🧊 식재료 선호도 (냉장고 기준)</div>
             <div className="text-[12px]">
-              냉장고에 넣어 둔 재료와 메뉴에 기록된 사용 내역을 기반으로{" "}
-              <span className="font-semibold">사용 횟수</span>를 계산해요.
+              냉장고와 메뉴 기록을 기반으로{" "}
+              <span className="font-semibold">어떤 재료를 자주/거의 안 쓰는지</span>
+              를 보여줘요.
             </div>
             <div className="grid grid-cols-2 gap-3 mt-1">
               {/* TOP 5 */}
@@ -164,20 +197,25 @@ const StatsModal: React.FC<StatsModalProps> = ({ isOpen, onClose }) => {
                   가장 많이 쓴 재료 TOP 5
                 </div>
                 <ul className="space-y-1">
-                  {topUsedIngredients.map((ing, idx) => (
-                    <li
-                      key={ing.name}
-                      className="flex items-center justify-between text-[11px]"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full bg-[#86E0B3]/20 text-[#2E6F51] text-[10px] flex items-center justify-center">
-                          {idx + 1}
-                        </span>
-                        <span>{ing.name}</span>
-                      </div>
-                      <span className="text-[#8A6A4D]">x{ing.count}</span>
+                  {topIngredients.length === 0 ? (
+                    <li className="text-[11px] text-[#847062]">
+                      아직 이번 달 사용 기록이 없어요.
                     </li>
-                  ))}
+                  ) : (
+                    topIngredients.map((ing, idx) => (
+                      <li
+                        key={ing.ingredient_name + idx}
+                        className="flex items-center justify-between text-[11px]"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-4 h-4 rounded-full bg-[#86E0B3]/20 text-[#2E6F51] text-[10px] flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <span>{ing.ingredient_name}</span>
+                        </div>
+                      </li>
+                    ))
+                  )}
                 </ul>
               </div>
 
@@ -187,20 +225,25 @@ const StatsModal: React.FC<StatsModalProps> = ({ isOpen, onClose }) => {
                   거의 안 쓴 재료 TOP 5
                 </div>
                 <ul className="space-y-1">
-                  {leastUsedIngredients.map((ing, idx) => (
-                    <li
-                      key={ing.name}
-                      className="flex items-center justify-between text-[11px]"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full bg-[#F2E1D2] text-[#8A6A4D] text-[10px] flex items-center justify-center">
-                          {idx + 1}
-                        </span>
-                        <span>{ing.name}</span>
-                      </div>
-                      <span className="text-[#8A6A4D]">x{ing.count}</span>
+                  {leastIngredients.length === 0 ? (
+                    <li className="text-[11px] text-[#847062]">
+                      아직 이번 달 사용 기록이 없어요.
                     </li>
-                  ))}
+                  ) : (
+                    leastIngredients.map((ing, idx) => (
+                      <li
+                        key={ing.ingredient_name + idx}
+                        className="flex items-center justify-between text-[11px]"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-4 h-4 rounded-full bg-[#F2E1D2] text-[#8A6A4D] text-[10px] flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <span>{ing.ingredient_name}</span>
+                        </div>
+                      </li>
+                    ))
+                  )}
                 </ul>
               </div>
             </div>

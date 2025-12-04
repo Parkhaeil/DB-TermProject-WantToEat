@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
 interface InviteCodeModalProps {
@@ -8,21 +8,72 @@ interface InviteCodeModalProps {
   onClose: () => void;
   familyName?: string;
   inviteCode?: string;
+  familyId?: number;
 }
 
 const InviteCodeModal: React.FC<InviteCodeModalProps> = ({
   isOpen,
   onClose,
   familyName = "이유민네 메뉴판",
-  inviteCode = "FAM2024XYZ",
+  inviteCode = "FAMXXXXXXX",
+  familyId,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [inviteCodeValue, setInviteCodeValue] = useState(inviteCode);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    // 이미 props로 초대코드를 받은 경우 (홈에서 가족 생성 직후 모달)
+    if (inviteCode && inviteCode !== "FAMXXXXXXX") {
+      setInviteCodeValue(inviteCode);
+      return;
+    }
+
+    // 가족 상세 페이지 등에서 familyId 기반으로 조회해서 쓰고 싶은 경우
+    const fetchInviteCode = async () => {
+      if (!familyId) return;
+      if (typeof window === "undefined") return;
+
+      try {
+        setIsLoading(true);
+        const storedUser = localStorage.getItem("currentUser");
+        const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+
+        if (!isLoggedIn || !storedUser) {
+          console.error("로그인이 필요합니다.");
+          return;
+        }
+
+        const currentUser = JSON.parse(storedUser);
+        const userId = currentUser.userId;
+
+        const res = await fetch(
+          `/api/families/invite?familyId=${familyId}&userId=${userId}`
+        );
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("초대코드 조회 실패:", data);
+          return;
+        }
+
+        // API에서 { code: { family_id, code } } 형태로 내려옴
+        setInviteCodeValue(data.code.code);
+      } catch (e) {
+        console.error("초대코드 조회 중 오류:", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchInviteCode();
+  }, [familyId, inviteCode]);
 
   if (!isOpen) return null;
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(inviteCode);
+      await navigator.clipboard.writeText(inviteCodeValue);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch (e) {
@@ -64,7 +115,7 @@ const InviteCodeModal: React.FC<InviteCodeModalProps> = ({
         <div className="mb-5 rounded-2xl border border-[#FDE0D8] bg-[#FFF6F4] px-6 py-5 flex flex-col items-center gap-3">
           <div className="text-[11px] text-[#C08A6B]">초대코드</div>
           <div className="text-[24px] font-extrabold tracking-widest text-[#F2805A]">
-            {inviteCode}
+            {isLoading ? "불러오는 중..." : inviteCodeValue}
           </div>
           <button
             type="button"

@@ -2,8 +2,40 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
 
-// POST /api/families/invite
-// body: { code: string, userId: number }
+
+type StatsQuery = {
+  familyId: number;
+  userId: number;
+};
+
+// 0. 권한 체크
+async function assertFamilyMember({ familyId, userId }: StatsQuery) {
+  const { data, error } = await supabaseAdmin
+    .from("family_members")
+    .select("family_id, user_id")
+    .eq("family_id", familyId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[STATS] 가족 구성원 조회 에러:", error);
+    return NextResponse.json(
+      { error: `가족 구성원 조회 실패: ${error.message}` },
+      { status: 500 }
+    );
+  }
+
+  if (!data) {
+    return NextResponse.json(
+      { error: "해당 가족에 대한 접근 권한이 없습니다." },
+      { status: 403 }
+    );
+  }
+
+  return null;
+}
+
+// invite code 생성 API 및 참여 처리
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -131,3 +163,61 @@ export async function POST(req: Request) {
 }
 
 
+// invite code 조회 API
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const familyIdParam = searchParams.get("familyId");
+    const userIdParam = searchParams.get("userId");
+
+    if (!familyIdParam || !userIdParam) {
+      return NextResponse.json(
+        { error: "familyId와 userId가 필요합니다." },
+        { status: 400 }
+      );
+    }
+
+    const familyId = Number(familyIdParam);
+    const userId = Number(userIdParam);
+
+    if (Number.isNaN(familyId) || Number.isNaN(userId)) {
+      return NextResponse.json(
+        { error: "familyId와 userId는 숫자여야 합니다." },
+        { status: 400 }
+      );
+    }
+
+    // 0. 권한 체크
+    const authError = await assertFamilyMember({ familyId, userId });
+    if (authError) return authError;
+
+    const { data: invite, error: inviteError } = await supabaseAdmin
+      .from("invitation_codes")
+      .select("family_id, code")
+      .eq("family_id", familyId)
+      .maybeSingle();
+
+    if (inviteError) {
+      console.error("초대 코드 조회 에러 (GET):", inviteError);
+      return NextResponse.json(
+        { error: `초대 코드 조회 실패: ${inviteError.message}` },
+        { status: 500 }
+      );
+    }
+
+    if (!invite) {
+      return NextResponse.json(
+        { error: "유효하지 않은 초대 코드입니다." },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({ code: invite });
+  } catch (err) {
+    console.error("GET /api/families/invite error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "서버 에러가 발생했습니다." },
+      { status: 500 }
+    );
+  }
+}
