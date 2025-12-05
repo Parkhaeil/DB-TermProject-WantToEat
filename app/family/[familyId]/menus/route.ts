@@ -12,7 +12,7 @@ type SelectedIngredient = {
 type AddMenuBody = {
   menuName: string;
   sourceType: SourceType;
-  status?: MenuStatus;
+  // status는 백엔드에서 역할에 따라 자동 설정됨
   selectedIngredients?: SelectedIngredient[];
   toBuy?: string[];
   userId: number;
@@ -248,7 +248,6 @@ export async function POST(
     const {
       menuName,
       sourceType,
-      status = "POSSIBLE",
       selectedIngredients = [],
       toBuy = [],
       userId,
@@ -257,6 +256,39 @@ export async function POST(
     if (!userId || !menuName || !sourceType) {
       return NextResponse.json(
         { error: "userId, menuName, sourceType는 필수입니다." },
+        { status: 400 }
+      );
+    }
+
+    // 사용자 역할 조회하여 status 자동 설정
+    const { data: member, error: memberError } = await supabaseAdmin
+      .from("family_members")
+      .select("role")
+      .eq("family_id", familyId)
+      .eq("user_id", userId)
+      .single();
+
+    if (memberError || !member) {
+      return NextResponse.json(
+        { error: "가족 구성원 정보를 찾을 수 없습니다." },
+        { status: 404 }
+      );
+    }
+
+    // 역할에 따라 status 자동 설정
+    let status: MenuStatus;
+    if (member.role === "PARENT") {
+      status = "POSSIBLE";
+    } else if (member.role === "CHILD") {
+      status = "WISH";
+    } else if (member.role === "FOLLOWER") {
+      return NextResponse.json(
+        { error: "팔로워는 메뉴를 추가할 수 없습니다." },
+        { status: 403 }
+      );
+    } else {
+      return NextResponse.json(
+        { error: "알 수 없는 역할입니다." },
         { status: 400 }
       );
     }

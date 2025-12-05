@@ -386,7 +386,7 @@ export default function FamilyLeftSection({
   const handleAddMenuToServer = async (data: {
     menuName: string;
     sourceType: "HOME" | "EAT_OUT";
-    status?: MenuStatus;
+    // status는 백엔드에서 역할에 따라 자동 설정됨
     selectedIngredients?: { storage: StorageType; name: string }[];
     toBuy?: string[];
   }) => {
@@ -432,7 +432,7 @@ export default function FamilyLeftSection({
           userId: currentUser.userId,
           menuName: data.menuName,
           sourceType: data.sourceType,
-          status: data.status ?? "POSSIBLE",
+          // status는 백엔드에서 역할에 따라 자동 설정됨 (전달하지 않음)
           selectedIngredients: data.selectedIngredients ?? [],
           toBuy: data.toBuy ?? [],
         }),
@@ -811,6 +811,11 @@ export default function FamilyLeftSection({
           <button
             type="button"
             onClick={() => {
+              // FOLLOWER는 메뉴 추가 불가
+              if (userRole === "FOLLOWER") {
+                alert("팔로워는 메뉴를 추가할 수 없습니다.");
+                return;
+              }
               setEditingMenu(null);
               setIsAddMenuOpen(true);
             }}

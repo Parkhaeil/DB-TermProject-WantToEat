@@ -4,7 +4,6 @@
 import React, { useState, useEffect } from "react";
 import {
   X,
-  ChevronDown,
   Snowflake,
   Refrigerator,
   Thermometer,
@@ -41,7 +40,7 @@ interface AddMenuModalProps {
   onSubmit?: (data: {
     menuName: string;
     sourceType: SourceType;
-    status?: MenuStatus;
+    // status는 백엔드에서 역할에 따라 자동 설정됨
     selectedIngredients?: {
       storage: SimpleStorage;
       name: string;
@@ -76,11 +75,7 @@ const storageMeta: Record<
   },
 };
 
-// 상태 아이콘/라벨
-const statusMeta: Record<MenuStatus, { label: string; icon: string }> = {
-  POSSIBLE: { label: "가능해요", icon: "🍳" },
-  WISH: { label: "먹고싶어요", icon: "🙏" },
-};
+// 상태 아이콘/라벨 (더 이상 사용하지 않음 - 백엔드에서 역할에 따라 자동 설정)
 
 function IngredientChip({
   name,
@@ -121,8 +116,7 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
 }) => {
   const [menuName, setMenuName] = useState("");
   const [sourceType, setSourceType] = useState<SourceType>("HOME");
-  const [status, setStatus] = useState<MenuStatus>("POSSIBLE");
-  const [isStatusOpen, setIsStatusOpen] = useState(false);
+  // status는 백엔드에서 역할에 따라 자동 설정되므로 제거
 
   // 재료 선택 상태
   const [selectedFreezer, setSelectedFreezer] = useState<string[]>([]);
@@ -189,7 +183,6 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
       console.log("간소화 모드 초기화:", { sourceMenuName, sourceMenuType });
       setMenuName(sourceMenuName || "");
       setSourceType(sourceMenuType || "HOME");
-      setStatus("POSSIBLE");
       setSelectedFreezer([]);
       setSelectedFridge([]);
       setSelectedRoom([]);
@@ -197,7 +190,6 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
       setToBuyInput("");
     } else if (editingMenu) {
       setMenuName(editingMenu.menu_name);
-      setStatus(editingMenu.status);
       
       // 재료 분류
       const freezer: string[] = [];
@@ -225,7 +217,6 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
       // 추가 모드일 때 폼 초기화
       setMenuName("");
       setSourceType("HOME");
-      setStatus("POSSIBLE");
       setSelectedFreezer([]);
       setSelectedFridge([]);
       setSelectedRoom([]);
@@ -280,11 +271,11 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
       onSubmit?.(data);
       onClose();
     } else {
-      // 일반 모드: 모든 정보 포함
+      // 일반 모드: 모든 정보 포함 (status는 백엔드에서 역할에 따라 자동 설정)
       const data = {
         menuName,
         sourceType,
-        status,
+        // status는 제거 - 백엔드에서 역할에 따라 자동 설정
         selectedIngredients: [
           ...selectedFreezer.map((name) => ({
             storage: "FREEZER" as const,
@@ -304,8 +295,6 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
       onClose();
     }
   };
-
-  const currentStatus = statusMeta[status];
 
   const isFormValid = menuName.trim().length > 0;
 
@@ -380,53 +369,6 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
 
           {!simpleMode && (
             <>
-              {/* 상태 */}
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-1 font-semibold">
-                  상태 <span className="text-[#F2805A]">*</span>
-                </div>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsStatusOpen((p) => !p)}
-                    className="w-full flex items-center justify-between rounded-xl border border-[#E7E1DA] bg-white px-3 py-2.5 text-[12px]"
-                  >
-                    <div className="flex items-center gap-2 text-[#32241B]">
-                      <span className="text-[16px]">{currentStatus.icon}</span>
-                      <span>{currentStatus.label}</span>
-                    </div>
-                    <ChevronDown size={18} className="text-[#C2B5A8]" />
-                  </button>
-
-                  {isStatusOpen && (
-                    <div className="absolute left-0 mt-2 w-40 rounded-xl bg-white border border-[#E7E1DA] shadow-lg overflow-hidden text-[12px] z-20">
-                      {(["POSSIBLE", "WISH"] as MenuStatus[]).map((value) => {
-                        const meta = statusMeta[value];
-                        const active = status === value;
-                        return (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => {
-                              setStatus(value);
-                              setIsStatusOpen(false);
-                            }}
-                            className={`flex w-full items-center justify-between px-3 py-2 hover:bg-[#FFF6F0] ${
-                              active ? "bg-[#FFF6F0]" : ""
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-[16px]">{meta.icon}</span>
-                              <span>{meta.label}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
               {/* 재료 선택 */}
               <div className="flex flex-col gap-2">
                 <div className="font-semibold">재료 선택</div>
