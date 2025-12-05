@@ -18,6 +18,161 @@ type AddMenuBody = {
   userId: number;
 };
 
+// GET API 응답 타입
+type MenuIngredientResponse = {
+  ingredient_id: number;
+  ingredient_name: string;
+  storage_type: "ROOM" | "FRIDGE" | "FREEZER" | "NEED";
+};
+
+type MenuResponse = {
+  menu_id: number;
+  menu_name: string;
+  status: MenuStatus;
+  author: string;
+  roleLabel: string;
+  ingredients: MenuIngredientResponse[];
+  likes: number;
+  sourceType: SourceType;
+};
+
+export async function GET(
+  req: Request,
+  context: { params: Promise<{ familyId: string }> }
+) {
+  try {
+    const { familyId: familyIdStr } = await context.params;
+    const familyId = Number(familyIdStr);
+
+    if (Number.isNaN(familyId)) {
+      return NextResponse.json(
+        { error: "올바른 familyId가 아닙니다." },
+        { status: 400 }
+      );
+    }
+
+    // 1) 메뉴 목록 조회
+    const { data: menus, error: menusError } = await supabaseAdmin
+      .from("menus")
+      .select("menu_id, menu_name, status, source_type, created_by, created_at")
+      .eq("family_id", familyId)
+      .order("created_at", { ascending: false });
+
+    if (menusError) {
+      console.error("menus select error:", menusError);
+      return NextResponse.json(
+        { error: "메뉴 조회 중 오류가 발생했습니다." },
+        { status: 500 }
+      );
+    }
+
+    if (!menus || menus.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    // 2) 각 메뉴에 대한 상세 정보 조회
+    const menuResponses: MenuResponse[] = await Promise.all(
+      menus.map(async (menu) => {
+        const menuId = menu.menu_id as number;
+        const createdBy = menu.created_by as number;
+
+        // 2-1) 사용자 정보 조회 (nickname)
+        const { data: user, error: userError } = await supabaseAdmin
+          .from("users")
+          .select("nickname")
+          .eq("user_id", createdBy)
+          .single();
+
+        const author = user?.nickname || "알 수 없음";
+
+        // 2-2) 가족 멤버 역할 조회
+        const { data: member, error: memberError } = await supabaseAdmin
+          .from("family_members")
+          .select("role")
+          .eq("family_id", familyId)
+          .eq("user_id", createdBy)
+          .single();
+
+        let roleLabel = "멤버";
+        if (member?.role === "PARENT") roleLabel = "부모";
+        else if (member?.role === "CHILD") roleLabel = "자녀";
+        else if (member?.role === "FOLLOWER") roleLabel = "군식구";
+
+        // 2-3) 재료 정보 조회
+        const { data: menuIngredients, error: ingredientsError } =
+          await supabaseAdmin
+            .from("menu_ingredients")
+            .select("ingredient_id")
+            .eq("menu_id", menuId);
+
+        const ingredients: MenuIngredientResponse[] = [];
+        if (menuIngredients && !ingredientsError && menuIngredients.length > 0) {
+          // ingredient_id 목록 추출
+          const ingredientIds = menuIngredients.map(
+            (mi) => mi.ingredient_id as number
+          );
+
+          // fridge_ingredients 조회
+          const { data: fridgeIngredients, error: fridgeError } =
+            await supabaseAdmin
+              .from("fridge_ingredients")
+              .select("ingredient_id, ingredient_name, storage_type")
+              .in("ingredient_id", ingredientIds);
+
+          if (fridgeIngredients && !fridgeError) {
+            ingredients.push(
+              ...fridgeIngredients.map((fi) => ({
+                ingredient_id: fi.ingredient_id as number,
+                ingredient_name: fi.ingredient_name as string,
+                storage_type: fi.storage_type as
+                  | "ROOM"
+                  | "FRIDGE"
+                  | "FREEZER"
+                  | "NEED",
+              }))
+            );
+          }
+        }
+
+        // 2-4) 좋아요 수 조회 (menu_likes 테이블이 있는 경우)
+        let likes = 0;
+        try {
+          const { count: likesCount, error: likesError } = await supabaseAdmin
+            .from("menu_likes")
+            .select("*", { count: "exact", head: true })
+            .eq("menu_id", menuId);
+
+          if (!likesError) {
+            likes = likesCount || 0;
+          }
+        } catch (err) {
+          // menu_likes 테이블이 없을 수 있으므로 에러 무시
+          console.log("menu_likes 조회 실패 (테이블이 없을 수 있음):", err);
+        }
+
+        return {
+          menu_id: menuId,
+          menu_name: menu.menu_name as string,
+          status: menu.status as MenuStatus,
+          author,
+          roleLabel,
+          ingredients,
+          likes,
+          sourceType: menu.source_type as SourceType,
+        };
+      })
+    );
+
+    return NextResponse.json(menuResponses);
+  } catch (err) {
+    console.error("GET /family/[familyId]/menus error:", err);
+    return NextResponse.json(
+      { error: "서버 에러가 발생했습니다." },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(
   req: Request,
   context: { params: Promise<{ familyId: string }> }
