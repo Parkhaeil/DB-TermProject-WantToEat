@@ -1,7 +1,7 @@
 // app/family/AddMenuModal.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   ChevronDown,
@@ -32,6 +32,8 @@ interface AddMenuModalProps {
   isOpen: boolean;
   onClose: () => void;
   familyName?: string;
+  familyId?: number; // 가족 ID 추가
+  userId?: number; // 사용자 ID 추가
   editingMenu?: EditingMenu | null;
   simpleMode?: boolean; // 간소화 모드: 메뉴 이름과 집밥/외식만
   sourceMenuName?: string; // 복사할 메뉴 이름 (간소화 모드용)
@@ -48,28 +50,7 @@ interface AddMenuModalProps {
   }) => void;
 }
 
-// 재료 더미 (나중에 오른쪽 냉장고 데이터로 교체 가능)
-const defaultFreezer = ["만두", "소고기", "냉동 새우", "아이스크림"];
-const defaultFridge = [
-  "김치",
-  "계란",
-  "두부",
-  "양파",
-  "돼지고기",
-  "우유",
-  "당근",
-  "치즈",
-];
-const defaultRoom = [
-  "김치",
-  "계란",
-  "두부",
-  "양파",
-  "돼지고기",
-  "우유",
-  "당근",
-  "치즈",
-];
+// 더미 재료 데이터 제거 - 실제 DB에서 가져옴
 
 const storageMeta: Record<
   SimpleStorage,
@@ -130,6 +111,8 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
   isOpen,
   onClose,
   familyName = "이유민네 메뉴판",
+  familyId,
+  userId,
   editingMenu = null,
   simpleMode = false,
   sourceMenuName = "",
@@ -149,6 +132,52 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
   // 장 봐야 할 것 (기본값 없음)
   const [toBuyInput, setToBuyInput] = useState("");
   const [toBuyList, setToBuyList] = useState<string[]>([]);
+
+  // 실제 냉장고 재료 데이터
+  const [freezerIngredients, setFreezerIngredients] = useState<string[]>([]);
+  const [fridgeIngredients, setFridgeIngredients] = useState<string[]>([]);
+  const [roomIngredients, setRoomIngredients] = useState<string[]>([]);
+  const [isLoadingIngredients, setIsLoadingIngredients] = useState(false);
+
+  // 냉장고 재료 데이터 가져오기
+  useEffect(() => {
+    const fetchIngredients = async () => {
+      if (!isOpen || !familyId || !userId || simpleMode) {
+        // 모달이 닫혀있거나 필수 정보가 없거나 간소화 모드면 재료를 가져오지 않음
+        return;
+      }
+
+      try {
+        setIsLoadingIngredients(true);
+        const res = await fetch(`/api/fridge?familyId=${familyId}&userId=${userId}`);
+        const json = await res.json();
+
+        if (!res.ok) {
+          console.error("냉장고 재료 조회 실패:", json);
+          // 에러가 발생해도 계속 진행 (빈 배열로 설정)
+          setFreezerIngredients([]);
+          setFridgeIngredients([]);
+          setRoomIngredients([]);
+          return;
+        }
+
+        // API 응답에서 재료 데이터 설정
+        setFreezerIngredients(json.freezer || []);
+        setFridgeIngredients(json.fridge || []);
+        setRoomIngredients(json.room || []);
+      } catch (err) {
+        console.error("냉장고 재료 조회 요청 에러:", err);
+        // 에러 발생 시 빈 배열로 설정
+        setFreezerIngredients([]);
+        setFridgeIngredients([]);
+        setRoomIngredients([]);
+      } finally {
+        setIsLoadingIngredients(false);
+      }
+    };
+
+    fetchIngredients();
+  }, [isOpen, familyId, userId, simpleMode]);
 
   // 수정 모드일 때 기존 데이터로 폼 초기화
   React.useEffect(() => {
@@ -408,10 +437,10 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
                       const meta = storageMeta[storage];
                       const list =
                         storage === "FREEZER"
-                          ? defaultFreezer
+                          ? freezerIngredients
                           : storage === "FRIDGE"
-                          ? defaultFridge
-                          : defaultRoom;
+                          ? fridgeIngredients
+                          : roomIngredients;
 
                       const selected =
                         storage === "FREEZER"
@@ -431,18 +460,28 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
                                 {meta.label}
                               </div>
                             </div>
-                            <div className="flex flex-wrap gap-1">
-                              {list.map((name) => (
-                                <IngredientChip
-                                  key={name}
-                                  name={name}
-                                  selected={selected.includes(name)}
-                                  onToggle={() =>
-                                    handleToggleIngredient(storage, name)
-                                  }
-                                />
-                              ))}
-                            </div>
+                            {isLoadingIngredients ? (
+                              <div className="text-[11px] text-[#A28B78] py-2">
+                                재료를 불러오는 중...
+                              </div>
+                            ) : list.length === 0 ? (
+                              <div className="text-[11px] text-[#A28B78] py-2">
+                                재료가 없습니다
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {list.map((name) => (
+                                  <IngredientChip
+                                    key={name}
+                                    name={name}
+                                    selected={selected.includes(name)}
+                                    onToggle={() =>
+                                      handleToggleIngredient(storage, name)
+                                    }
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
