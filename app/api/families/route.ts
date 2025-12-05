@@ -17,11 +17,33 @@ export async function GET(req: Request) {
 
     const numericUserId = Number(userId);
 
-    // user_families_view에서 해당 user_id만 조회
+    // user_families_view에서 해당 user_id만 조회 (is_active가 true인 것만)
+    // user_families_view가 is_active를 포함하지 않을 수 있으므로, family_members에서 직접 조회
+    const { data: familyMembers, error: membersError } = await supabaseAdmin
+      .from("family_members")
+      .select("family_id, role, families!inner(family_id, family_name)")
+      .eq("user_id", numericUserId)
+      .eq("is_active", true);
+
+    if (membersError) {
+      console.error("GET /api/families family_members error:", membersError);
+      return NextResponse.json(
+        { error: "DB 조회 중 오류가 발생했습니다." },
+        { status: 500 }
+      );
+    }
+
+    if (!familyMembers || familyMembers.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    // user_families_view에서 추가 정보 조회 (또는 직접 조인)
+    const familyIds = familyMembers.map((fm: any) => fm.family_id);
     const { data, error } = await supabaseAdmin
       .from("user_families_view")
       .select("family_id, family_name, role, member_count, today_menu")
-      .eq("user_id", numericUserId);
+      .eq("user_id", numericUserId)
+      .in("family_id", familyIds);
 
     if (error) {
       console.error("GET /api/families supabase error:", error);
@@ -35,8 +57,7 @@ export async function GET(req: Request) {
       return NextResponse.json([]);
     }
 
-    const familyIds = data.map((f: any) => f.family_id);
-
+    // 이미 위에서 familyIds를 정의했으므로 재사용
     const { data: activeMembers, error: activeMembersError } =
       await supabaseAdmin
         .from("family_members")

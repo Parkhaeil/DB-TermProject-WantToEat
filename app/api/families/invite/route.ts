@@ -107,7 +107,7 @@ export async function POST(req: Request) {
     // 4) 이미 가족 구성원인지 확인
     const { data: existingMember, error: memberCheckError } = await supabaseAdmin
       .from("family_members")
-      .select("family_id, user_id")
+      .select("family_id, user_id, is_active, role")
       .eq("family_id", familyId)
       .eq("user_id", userId)
       .maybeSingle();
@@ -120,7 +120,36 @@ export async function POST(req: Request) {
       );
     }
 
+    // 이미 가족 구성원인 경우
     if (existingMember) {
+      // is_active가 false인 경우, 다시 활성화
+      if (!existingMember.is_active) {
+        const { error: updateError } = await supabaseAdmin
+          .from("family_members")
+          .update({ is_active: true })
+          .eq("family_id", familyId)
+          .eq("user_id", userId);
+
+        if (updateError) {
+          console.error("가족 구성원 활성화 에러:", updateError);
+          return NextResponse.json(
+            { error: `가족 재참여 실패: ${updateError.message}` },
+            { status: 500 }
+          );
+        }
+
+        // 성공 응답 - 프론트에서 가족 페이지로 이동할 때 사용
+        return NextResponse.json({
+          success: true,
+          family: {
+            familyId: family.family_id,
+            familyName: family.family_name,
+            role: existingMember.role || "FOLLOWER",
+          },
+        });
+      }
+
+      // 이미 활성 상태인 경우
       return NextResponse.json(
         { error: "이미 이 가족에 속해 있습니다." },
         { status: 400 }
@@ -134,6 +163,7 @@ export async function POST(req: Request) {
         family_id: familyId,
         user_id: userId,
         role: "FOLLOWER",
+        is_active: true,
       });
 
     if (insertError) {

@@ -66,13 +66,7 @@ export default function FamilyDetailPage() {
 
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null); // ⭐ 현재 유저
 
-  // 임시 더미 구성원 (나중에 실제 API 연결)
-  const [members, setMembers] = useState<FamilyMember[]>([
-    { id: 1, name: "엄마", joinedAt: "2024.01.01", role: "PARENT" },
-    { id: 2, name: "아빠", joinedAt: "2024.01.01", role: "PARENT" },
-    { id: 3, name: "이유민", joinedAt: "2024.01.01", role: "CHILD" },
-    { id: 4, name: "서혜민", joinedAt: "2024.01.01", role: "FOLLOWER" },
-  ]);
+  const [members, setMembers] = useState<FamilyMember[]>([]);
 
   useEffect(() => {
     if (!familyIdParam) return;
@@ -129,9 +123,159 @@ export default function FamilyDetailPage() {
     fetchFamilyInfo();
   }, [familyIdParam, router]);
 
+  // 가족 구성원 목록 조회
+  useEffect(() => {
+    if (!familyIdParam) return;
+    if (typeof window === "undefined") return;
+
+    const fetchMembers = async () => {
+      try {
+        const familyIdNum = Number(familyIdParam);
+        if (Number.isNaN(familyIdNum)) return;
+
+        const res = await fetch(`/api/families/role?familyId=${familyIdNum}`, {
+          cache: "no-store",
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("가족 구성원 조회 에러:", data);
+          return;
+        }
+
+        if (data.data) {
+          setMembers(data.data);
+        }
+      } catch (err) {
+        console.error("가족 구성원 조회 오류:", err);
+      }
+    };
+
+    fetchMembers();
+  }, [familyIdParam]);
+
   const familyName = familyInfo?.family_name ?? "가족 메뉴판";
   const currentFamilyRole: Role = familyInfo?.role ?? "FOLLOWER";
   const memberCount = familyInfo?.member_count ?? members.length;
+
+  // 역할 변경 핸들러
+  const handleChangeRole = async (targetUserId: number, newRole: Role) => {
+    if (!currentUser) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+
+    const familyIdNum = Number(familyIdParam);
+    if (Number.isNaN(familyIdNum)) {
+      alert("유효하지 않은 가족 ID입니다.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/families/role", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          familyId: familyIdNum,
+          targetUserId: targetUserId,
+          newRole: newRole,
+          userId: currentUser.userId,
+        }),
+      });
+
+      // 응답이 비어있을 수 있으므로 체크
+      let data;
+      const text = await res.text();
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          console.error("JSON 파싱 에러:", e, "응답:", text);
+          alert("서버 응답을 처리할 수 없습니다.");
+          return;
+        }
+      } else {
+        data = {};
+      }
+
+      if (!res.ok) {
+        console.error("역할 변경 실패:", data);
+        alert(data.error || "역할 변경에 실패했습니다.");
+        return;
+      }
+
+      // 성공 시 로컬 state 업데이트
+      setMembers((prev) =>
+        prev.map((m) => (m.id === targetUserId ? { ...m, role: newRole } : m))
+      );
+
+      // 성공 알림
+      const roleLabels: { [key: string]: string } = {
+        PARENT: "부모",
+        CHILD: "자식",
+        FOLLOWER: "팔로워",
+      };
+      const targetMember = members.find((m) => m.id === targetUserId);
+      alert(`${targetMember?.name || "구성원"}의 역할이 ${roleLabels[newRole]}로 변경되었습니다.`);
+    } catch (err) {
+      console.error("역할 변경 요청 오류:", err);
+      alert("서버 연결 실패");
+    }
+  };
+
+  // 구성원 제거 핸들러
+  const handleKickMember = async (targetUserId: number) => {
+    if (!currentUser) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+
+    const familyIdNum = Number(familyIdParam);
+    if (Number.isNaN(familyIdNum)) {
+      alert("유효하지 않은 가족 ID입니다.");
+      return;
+    }
+
+    const targetMember = members.find((m) => m.id === targetUserId);
+    if (!targetMember) {
+      alert("구성원을 찾을 수 없습니다.");
+      return;
+    }
+
+    // 확인 메시지
+    if (!confirm(`${targetMember.name}을(를) 가족에서 제거하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/families/role", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          familyId: familyIdNum,
+          targetUserId: targetUserId,
+          userId: currentUser.userId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("구성원 제거 실패:", data);
+        alert(data.error || "구성원 제거에 실패했습니다.");
+        return;
+      }
+
+      // 성공 시 로컬 state 업데이트
+      setMembers((prev) => prev.filter((m) => m.id !== targetUserId));
+
+      // 성공 알림
+      alert(`${targetMember.name}이(가) 가족에서 제거되었습니다.`);
+    } catch (err) {
+      console.error("구성원 제거 요청 오류:", err);
+      alert("서버 연결 실패");
+    }
+  };
 
   // ⭐ AddMenuModal이 호출할 핸들러
   const handleAddMenuSubmit = async (data: {
@@ -219,23 +363,16 @@ export default function FamilyDetailPage() {
             <Key size={15} />
             초대코드
           </button>
-          <button
-            onClick={() => setIsMemberModalOpen(true)}
-            className="flex gap-1 items-center bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
-                        text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
-          >
-            <Settings size={15} />
-            가족 관리
-          </button>
-          {/* ⭐ 테스트용 메뉴 추가 버튼 */}
-          <button
-            onClick={() => setIsAddMenuOpen(true)}
-            className="flex gap-1 items-center bg-[#F2805A] border border-[#E9E4DE] px-4 py-2 rounded-xl 
-                        text-[12px] font-semibold text-white transition-all duration-150 transform active:scale-95"
-          >
-            메뉴 추가
-          </button>
-
+          {currentFamilyRole === "PARENT" && (
+            <button
+              onClick={() => setIsMemberModalOpen(true)}
+              className="flex gap-1 items-center bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
+                          text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
+            >
+              <Settings size={15} />
+              가족 관리
+            </button>
+          )}
         </div>
       </div>
 
@@ -268,14 +405,9 @@ export default function FamilyDetailPage() {
         onClose={() => setIsMemberModalOpen(false)}
         familyName={familyName}
         members={members}
-        onChangeRole={(id, newRole) =>
-          setMembers((prev) =>
-            prev.map((m) => (m.id === id ? { ...m, role: newRole } : m))
-          )
-        }
-        onKick={(id) =>
-          setMembers((prev) => prev.filter((m) => m.id !== id))
-        }
+        currentUserId={currentUser?.userId}
+        onChangeRole={handleChangeRole}
+        onKick={handleKickMember}
       />
 
       {/* ⭐ 메뉴 추가 모달 */}

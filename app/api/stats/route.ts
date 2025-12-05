@@ -61,11 +61,12 @@ async function assertFamilyMember({ familyId, userId }: StatsQuery) {
 
 // 1. 이번 달에 제일 많이 먹은 메뉴 top 3
 async function getTopMenus({ familyId }: StatsQuery) {
+  // 타임존 문제 방지: 로컬 날짜만 사용
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const startStr = startOfMonth.toISOString().slice(0, 10);
-  const endStr = startOfNextMonth.toISOString().slice(0, 10);
+  const startStr = `${startOfMonth.getFullYear()}-${String(startOfMonth.getMonth() + 1).padStart(2, "0")}-${String(startOfMonth.getDate()).padStart(2, "0")}`;
+  const endStr = `${startOfNextMonth.getFullYear()}-${String(startOfNextMonth.getMonth() + 1).padStart(2, "0")}-${String(startOfNextMonth.getDate()).padStart(2, "0")}`;
 
   const { data, error } = await supabaseAdmin
     .from("today_menus")
@@ -116,11 +117,12 @@ async function getTopMenus({ familyId }: StatsQuery) {
 
 // 2. 배달음식 / 집밥 비율
 async function getHomeAndEatOutPercent({ familyId }: StatsQuery) {
+  // 타임존 문제 방지: 로컬 날짜만 사용
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const startStr = startOfMonth.toISOString().slice(0, 10);
-  const endStr = startOfNextMonth.toISOString().slice(0, 10);
+  const startStr = `${startOfMonth.getFullYear()}-${String(startOfMonth.getMonth() + 1).padStart(2, "0")}-${String(startOfMonth.getDate()).padStart(2, "0")}`;
+  const endStr = `${startOfNextMonth.getFullYear()}-${String(startOfNextMonth.getMonth() + 1).padStart(2, "0")}-${String(startOfNextMonth.getDate()).padStart(2, "0")}`;
 
   const { data, error } = await supabaseAdmin
     .from("today_menus")

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   X,
   ChevronDown,
@@ -22,6 +22,7 @@ interface MemberEditModalProps {
   onClose: () => void;
   familyName: string;
   members: FamilyMember[];
+  currentUserId?: number; // 현재 로그인한 사용자 ID
 
   onChangeRole?: (id: number, newRole: Role) => void;
   onKick?: (id: number) => void;
@@ -44,10 +45,48 @@ const MemberEditModal: React.FC<MemberEditModalProps> = ({
   onClose,
   familyName,
   members,
+  currentUserId,
   onChangeRole,
   onKick,
 }) => {
   const [openRoleMemberId, setOpenRoleMemberId] = useState<number | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
+  const buttonRefs = useRef<{ [key: number]: HTMLButtonElement | null }>({});
+
+  useEffect(() => {
+    if (openRoleMemberId !== null && buttonRefs.current[openRoleMemberId]) {
+      const button = buttonRefs.current[openRoleMemberId];
+      if (button) {
+        const rect = button.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + 8,
+          right: window.innerWidth - rect.right,
+        });
+      }
+    } else {
+      setDropdownPosition(null);
+    }
+  }, [openRoleMemberId]);
+
+  // 외부 클릭 시 드롭다운 닫기
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (openRoleMemberId !== null) {
+        const button = buttonRefs.current[openRoleMemberId];
+        if (button && !button.contains(e.target as Node)) {
+          const target = e.target as HTMLElement;
+          if (!target.closest('.role-dropdown-menu')) {
+            setOpenRoleMemberId(null);
+          }
+        }
+      }
+    };
+
+    if (openRoleMemberId !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [openRoleMemberId]);
 
   if (!isOpen) return null;
 
@@ -56,10 +95,69 @@ const MemberEditModal: React.FC<MemberEditModalProps> = ({
     onChangeRole?.(memberId, newRole);
   };
 
+  const isCurrentUser = (memberId: number) => {
+    return currentUserId !== undefined && memberId === currentUserId;
+  };
+
+  const openMember = members.find((m) => m.id === openRoleMemberId);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center text-[#32241B]">
       {/* 배경 오버레이 */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      
+      {/* 역할 변경 드롭다운 (스크롤 영역 밖에 fixed로 배치) */}
+      {openRoleMemberId !== null && dropdownPosition && openMember && (
+        <div
+          className="role-dropdown-menu fixed w-28 bg-white border border-[#E7E1DA] rounded-xl shadow-lg text-[12px] z-[60]"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            right: `${dropdownPosition.right}px`,
+          }}
+        >
+          {/* 부모 */}
+          <button
+            type="button"
+            onClick={() => handleSelectRole(openMember.id, "PARENT")}
+            className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-[#FFF6F4]"
+          >
+            <span className="inline-block mr-1 rounded-full px-1.5 py-0.5 text-[10px] bg-[#F2805A] text-white">
+              부모
+            </span>
+            {openMember.role === "PARENT" && (
+              <Check size={14} className="text-[#F2805A]" />
+            )}
+          </button>
+
+          {/* 자식 */}
+          <button
+            type="button"
+            onClick={() => handleSelectRole(openMember.id, "CHILD")}
+            className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-[#F4FFF8]"
+          >
+            <span className="inline-block mr-1 rounded-full px-1.5 py-0.5 text-[10px] bg-[#86E0B3] text-[#32241B]">
+              자식
+            </span>
+            {openMember.role === "CHILD" && (
+              <Check size={14} className="text-[#3E7358]" />
+            )}
+          </button>
+
+          {/* 팔로워 */}
+          <button
+            type="button"
+            onClick={() => handleSelectRole(openMember.id, "FOLLOWER")}
+            className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-[#FCFAF8]"
+          >
+            <span className="inline-block mr-1 rounded-full px-1.5 py-0.5 text-[10px] bg-[#F5F0EC] text-[#847062]">
+              팔로워
+            </span>
+            {openMember.role === "FOLLOWER" && (
+              <Check size={14} className="text-[#847062]" />
+            )}
+          </button>
+        </div>
+      )}
 
       {/* 모달 카드 */}
       <div className="relative z-10 w-full max-w-lg rounded-2xl bg-[#FFFEFB] border border-[#E7E1DA] px-6 py-5 shadow-lg">
@@ -110,75 +208,47 @@ const MemberEditModal: React.FC<MemberEditModalProps> = ({
               <div className="flex items-center gap-2">
                 {/* 역할 선택 토글 */}
                 <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setOpenRoleMemberId(
-                        openRoleMemberId === m.id ? null : m.id
-                      )
-                    }
-                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold ${roleBadgeClass(
-                      m.role
-                    )}`}
-                  >
-                    {roleLabel(m.role)}
-                    <ChevronDown size={14} />
-                  </button>
-
-                  {openRoleMemberId === m.id && (
-                    <div className="absolute right-0 mt-2 w-28 bg-white border border-[#E7E1DA] rounded-xl shadow-lg text-[12px] z-30">
-                      {/* 부모 */}
-                      <button
-                        type="button"
-                        onClick={() => handleSelectRole(m.id, "PARENT")}
-                        className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-[#FFF6F4]"
-                      >
-                        <span className="inline-block mr-1 rounded-full px-1.5 py-0.5 text-[10px] bg-[#F2805A] text-white">
-                          부모
-                        </span>
-                        {m.role === "PARENT" && (
-                          <Check size={14} className="text-[#F2805A]" />
-                        )}
-                      </button>
-
-                      {/* 자식 */}
-                      <button
-                        type="button"
-                        onClick={() => handleSelectRole(m.id, "CHILD")}
-                        className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-[#F4FFF8]"
-                      >
-                        <span className="inline-block mr-1 rounded-full px-1.5 py-0.5 text-[10px] bg-[#86E0B3] text-[#32241B]">
-                          자식
-                        </span>
-                        {m.role === "CHILD" && (
-                          <Check size={14} className="text-[#3E7358]" />
-                        )}
-                      </button>
-
-                      {/* 팔로워 */}
-                      <button
-                        type="button"
-                        onClick={() => handleSelectRole(m.id, "FOLLOWER")}
-                        className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-[#FCFAF8]"
-                      >
-                        <span className="inline-block mr-1 rounded-full px-1.5 py-0.5 text-[10px] bg-[#F5F0EC] text-[#847062]">
-                          팔로워
-                        </span>
-                        {m.role === "FOLLOWER" && (
-                          <Check size={14} className="text-[#847062]" />
-                        )}
-                      </button>
+                  {isCurrentUser(m.id) ? (
+                    // 본인인 경우: 역할 변경 불가 (색상은 그대로, 클릭만 비활성화)
+                    <div
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold ${roleBadgeClass(
+                        m.role
+                      )} cursor-not-allowed`}
+                    >
+                      {roleLabel(m.role)}
                     </div>
+                  ) : (
+                    // 다른 사용자인 경우: 역할 변경 가능
+                    <button
+                      type="button"
+                      ref={(el) => {
+                        buttonRefs.current[m.id] = el;
+                      }}
+                      onClick={() =>
+                        setOpenRoleMemberId(
+                          openRoleMemberId === m.id ? null : m.id
+                        )
+                      }
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold ${roleBadgeClass(
+                        m.role
+                      )}`}
+                    >
+                      {roleLabel(m.role)}
+                      <ChevronDown size={14} />
+                    </button>
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => onKick?.(m.id)}
-                  className="p-1 rounded-full hover:bg-[#FFF0EE] transition"
-                >
-                  <UserMinus size={16} className="text-[#D0675B]" />
-                </button>
+                {/* 본인이 아닌 경우에만 탈퇴 버튼 표시 */}
+                {!isCurrentUser(m.id) && (
+                  <button
+                    type="button"
+                    onClick={() => onKick?.(m.id)}
+                    className="p-1 rounded-full hover:bg-[#FFF0EE] transition"
+                  >
+                    <UserMinus size={16} className="text-[#D0675B]" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

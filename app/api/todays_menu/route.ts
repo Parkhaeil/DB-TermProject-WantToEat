@@ -24,7 +24,13 @@ export async function GET(req: Request) {
       );
     }
 
-    const targetDate = targetDateParam || new Date().toISOString().split("T")[0];
+    const targetDate = targetDateParam || (() => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    })();
 
     const { data: rows, error } = await supabaseAdmin
       .from("v_today_menu_cards")
@@ -110,7 +116,13 @@ export async function POST(req: Request) {
       );
     }
 
-    const date = targetDate || new Date().toISOString().split("T")[0];
+    const date = targetDate || (() => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    })();
 
     // 부모 권한 체크
     const { data: parentData, error: parentError } = await supabaseAdmin
@@ -135,17 +147,46 @@ export async function POST(req: Request) {
       );
     }
 
+    // 이미 오늘의 메뉴가 있는지 확인
+    const { data: existingMenu, error: checkError } = await supabaseAdmin
+      .from("today_menus")
+      .select("today_id")
+      .eq("family_id", familyId)
+      .eq("target_date", date)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("오늘의 메뉴 중복 체크 에러:", checkError);
+      return NextResponse.json(
+        { error: "오늘의 메뉴 확인 중 오류가 발생했습니다." },
+        { status: 500 }
+      );
+    }
+
+    if (existingMenu) {
+      return NextResponse.json(
+        { error: "이미 해당 날짜의 메뉴가 등록되어 있습니다." },
+        { status: 400 }
+      );
+    }
+
     // 오늘의 메뉴 등록
-    const { error: todayMenuError } = await supabaseAdmin
+    const now = new Date();
+    const createdAt = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+
+    const { data: insertedData, error: todayMenuError } = await supabaseAdmin
       .from("today_menus")
       .insert({
         family_id: familyId,
         menu_id: menuId,
         target_date: date,
         selected_by: userId,
-      });
+        created_at: createdAt,
+      })
+      .select("today_id, created_at")
+      .single();
 
-    if (todayMenuError) {
+    if (todayMenuError || !insertedData) {
       console.error("오늘의 메뉴 등록 에러:", todayMenuError);
       return NextResponse.json(
         { error: "오늘의 메뉴 등록 실패" },
@@ -153,10 +194,25 @@ export async function POST(req: Request) {
       );
     }
 
+    // created_at을 날짜 문자열로 변환 (타임존 문제 방지)
+    const createdAtDate = insertedData.created_at
+      ? (() => {
+          const dateObj = new Date(insertedData.created_at);
+          const year = dateObj.getFullYear();
+          const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+          const day = String(dateObj.getDate()).padStart(2, "0");
+          return `${year}-${month}-${day}`;
+        })()
+      : null;
+
     return NextResponse.json(
       { 
         success: true,
         message: "오늘의 메뉴가 성공적으로 등록되었습니다.",
+        data: {
+          today_id: insertedData.today_id,
+          created_at: createdAtDate,
+        },
       },
       { status: 201 }
     );
@@ -191,7 +247,13 @@ export async function DELETE(req: Request) {
       );
     }
 
-    const targetDate = targetDateParam || new Date().toISOString().split("T")[0];
+    const targetDate = targetDateParam || (() => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    })();
 
     const { error: todayMenuError } = await supabaseAdmin
       .from("today_menus")
