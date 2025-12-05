@@ -326,3 +326,106 @@ export async function POST(
     );
   }
 }
+
+export async function DELETE(
+  req: Request,
+  context: { params: Promise<{ familyId: string }> }
+) {
+  try {
+    const { familyId: familyIdStr } = await context.params;
+    const familyId = Number(familyIdStr);
+
+    if (Number.isNaN(familyId)) {
+      return NextResponse.json(
+        { error: "올바른 familyId가 아닙니다." },
+        { status: 400 }
+      );
+    }
+
+    // URL에서 menuId 추출 (예: /family/1/menus?menuId=123)
+    const url = new URL(req.url);
+    const menuIdStr = url.searchParams.get("menuId");
+    const menuId = menuIdStr ? Number(menuIdStr) : null;
+
+    if (!menuId || Number.isNaN(menuId)) {
+      return NextResponse.json(
+        { error: "올바른 menuId가 필요합니다." },
+        { status: 400 }
+      );
+    }
+
+    // 메뉴가 해당 가족에 속하는지 확인
+    const { data: menu, error: menuCheckError } = await supabaseAdmin
+      .from("menus")
+      .select("menu_id, family_id")
+      .eq("menu_id", menuId)
+      .eq("family_id", familyId)
+      .single();
+
+    if (menuCheckError || !menu) {
+      return NextResponse.json(
+        { error: "메뉴를 찾을 수 없거나 권한이 없습니다." },
+        { status: 404 }
+      );
+    }
+
+    // 연쇄 삭제 시작
+    // 1) menu_likes 삭제 (있는 경우)
+    try {
+      const { error: likesError } = await supabaseAdmin
+        .from("menu_likes")
+        .delete()
+        .eq("menu_id", menuId);
+
+      if (likesError) {
+        console.log("menu_likes 삭제 실패 (테이블이 없을 수 있음):", likesError);
+        // menu_likes 테이블이 없을 수 있으므로 에러를 무시하고 계속 진행
+      }
+    } catch (err) {
+      console.log("menu_likes 삭제 중 예외 발생 (무시):", err);
+    }
+
+    // 2) menu_ingredients 삭제 (메뉴-재료 연결 테이블)
+    const { error: ingredientsError } = await supabaseAdmin
+      .from("menu_ingredients")
+      .delete()
+      .eq("menu_id", menuId);
+
+    if (ingredientsError) {
+      console.error("menu_ingredients 삭제 실패:", ingredientsError);
+      return NextResponse.json(
+        { error: "메뉴 재료 삭제 중 오류가 발생했습니다." },
+        { status: 500 }
+      );
+    }
+
+    // 3) menus 삭제 (메뉴 자체)
+    const { error: menuDeleteError } = await supabaseAdmin
+      .from("menus")
+      .delete()
+      .eq("menu_id", menuId)
+      .eq("family_id", familyId);
+
+    if (menuDeleteError) {
+      console.error("menus 삭제 실패:", menuDeleteError);
+      return NextResponse.json(
+        { error: "메뉴 삭제 중 오류가 발생했습니다." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        message: "메뉴가 성공적으로 삭제되었습니다.",
+        menuId,
+      },
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error("DELETE /family/[familyId]/menus error:", err);
+    return NextResponse.json(
+      { error: "서버 에러가 발생했습니다." },
+      { status: 500 }
+    );
+  }
+}

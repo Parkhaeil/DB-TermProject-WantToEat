@@ -445,11 +445,51 @@ export default function FamilyLeftSection() {
 
   // 메뉴 삭제
   const handleDeleteMenu = async (menuId: number) => {
-    // TODO: 삭제 API 연동 필요
-    // 현재는 로컬 state만 업데이트
-    setMenus((prev) => prev.filter((m) => m.menu_id !== menuId));
-    // 삭제 후 목록 새로고침
-    await fetchMenus();
+    if (!familyIdParam) {
+      alert("가족 ID를 찾을 수 없습니다.");
+      return;
+    }
+
+    // 삭제 확인
+    const menuToDelete = menus.find((m) => m.menu_id === menuId);
+    const confirmMessage = menuToDelete
+      ? `'${menuToDelete.menu_name}' 메뉴를 정말 삭제하시겠습니까?`
+      : "이 메뉴를 정말 삭제하시겠습니까?";
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    const familyIdNum = Number(familyIdParam);
+    if (Number.isNaN(familyIdNum)) {
+      alert("유효하지 않은 가족 ID입니다.");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `/family/${familyIdNum}/menus?menuId=${menuId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error("메뉴 삭제 실패:", json);
+        alert(json.error || "메뉴 삭제 실패");
+        return;
+      }
+
+      console.log("메뉴 삭제 성공:", json);
+
+      // 삭제 후 목록 새로고침
+      await fetchMenus();
+    } catch (err) {
+      console.error("메뉴 삭제 요청 에러:", err);
+      alert("서버 연결 실패");
+    }
   };
 
   // 메뉴 복사 - 가족 선택 모달 먼저 띄우기
