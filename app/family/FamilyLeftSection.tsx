@@ -450,19 +450,19 @@ export default function FamilyLeftSection() {
       return;
     }
 
-    // 삭제 확인
-    const menuToDelete = menus.find((m) => m.menu_id === menuId);
-    const confirmMessage = menuToDelete
-      ? `'${menuToDelete.menu_name}' 메뉴를 정말 삭제하시겠습니까?`
-      : "이 메뉴를 정말 삭제하시겠습니까?";
-
-    if (!confirm(confirmMessage)) {
-      return;
-    }
-
     const familyIdNum = Number(familyIdParam);
     if (Number.isNaN(familyIdNum)) {
       alert("유효하지 않은 가족 ID입니다.");
+      return;
+    }
+
+    // 삭제 확인
+    const menuToDelete = menus.find((m) => m.menu_id === menuId);
+    const confirmMessage = menuToDelete
+      ? `'${menuToDelete.menu_name}' 메뉴를 정말 삭제하시겠습니까?\n\n이 메뉴가 오늘의 메뉴로 설정되어 있다면, 삭제 후 오늘의 메뉴는 미정으로 변경됩니다. 괜찮으신가요?`
+      : "이 메뉴를 정말 삭제하시겠습니까?\n\n이 메뉴가 오늘의 메뉴로 설정되어 있다면, 삭제 후 오늘의 메뉴는 미정으로 변경됩니다. 괜찮으신가요?";
+
+    if (!confirm(confirmMessage)) {
       return;
     }
 

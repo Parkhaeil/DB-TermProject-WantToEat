@@ -370,7 +370,78 @@ export async function DELETE(
     }
 
     // 연쇄 삭제 시작
-    // 1) menu_likes 삭제 (있는 경우)
+    // 중요: 외래키 제약조건 때문에 today_menus를 먼저 처리해야 함
+    // 1) today_menus에서 해당 메뉴가 오늘의 메뉴로 설정되어 있는지 확인 및 처리
+    try {
+      // 먼저 today_menus 테이블에 해당 menu_id가 있는지 확인
+      // 컬럼명을 정확히 모르므로 * 로 조회하거나 menu_id, family_id만 조회
+      const { data: todayMenus, error: todayMenuCheckError } = await supabaseAdmin
+        .from("today_menus")
+        .select("*")
+        .eq("menu_id", menuId)
+        .eq("family_id", familyId);
+
+      if (todayMenuCheckError) {
+        console.error("today_menus 조회 에러:", todayMenuCheckError);
+        // 테이블이 없거나 조회 실패해도 계속 진행
+      } else if (todayMenus && todayMenus.length > 0) {
+        console.log("오늘의 메뉴로 설정된 메뉴 발견, 처리 시작...");
+        console.log("찾은 레코드 수:", todayMenus.length);
+        
+        // menu_id를 NULL로 설정 시도 (미정 상태로 변경)
+        const { error: todayMenuUpdateError } = await supabaseAdmin
+          .from("today_menus")
+          .update({ menu_id: null })
+          .eq("menu_id", menuId)
+          .eq("family_id", familyId);
+
+        if (todayMenuUpdateError) {
+          console.error("today_menus menu_id NULL 설정 실패:", todayMenuUpdateError);
+          console.error("에러 코드:", todayMenuUpdateError.code);
+          console.error("에러 메시지:", todayMenuUpdateError.message);
+          
+          // menu_id를 NULL로 설정할 수 없으면 레코드를 삭제
+          console.log("레코드 삭제 시도...");
+          const { error: todayMenuDeleteError } = await supabaseAdmin
+            .from("today_menus")
+            .delete()
+            .eq("menu_id", menuId)
+            .eq("family_id", familyId);
+
+          if (todayMenuDeleteError) {
+            console.error("today_menus 삭제 실패:", todayMenuDeleteError);
+            console.error("삭제 에러 코드:", todayMenuDeleteError.code);
+            console.error("삭제 에러 메시지:", todayMenuDeleteError.message);
+            
+            // today_menus 삭제 실패 시 에러 반환
+            return NextResponse.json(
+              { 
+                error: "오늘의 메뉴에서 메뉴를 제거하는 중 오류가 발생했습니다.",
+                details: todayMenuDeleteError.message,
+                code: todayMenuDeleteError.code
+              },
+              { status: 500 }
+            );
+          } else {
+            console.log("today_menus 레코드 삭제 성공 (메뉴 삭제 후 미정 상태로 처리됨)");
+          }
+        } else {
+          console.log("today_menus menu_id를 NULL로 설정 성공 (미정 상태로 변경)");
+        }
+      }
+    } catch (err) {
+      console.error("today_menus 처리 중 예외 발생:", err);
+      console.error("예외 상세:", err instanceof Error ? err.stack : String(err));
+      return NextResponse.json(
+        { 
+          error: "오늘의 메뉴 처리 중 예외가 발생했습니다.",
+          details: err instanceof Error ? err.message : String(err)
+        },
+        { status: 500 }
+      );
+    }
+
+    // 2) menu_likes 삭제 (있는 경우)
     try {
       const { error: likesError } = await supabaseAdmin
         .from("menu_likes")
@@ -385,7 +456,7 @@ export async function DELETE(
       console.log("menu_likes 삭제 중 예외 발생 (무시):", err);
     }
 
-    // 2) menu_ingredients 삭제 (메뉴-재료 연결 테이블)
+    // 3) menu_ingredients 삭제 (메뉴-재료 연결 테이블)
     const { error: ingredientsError } = await supabaseAdmin
       .from("menu_ingredients")
       .delete()
@@ -399,7 +470,7 @@ export async function DELETE(
       );
     }
 
-    // 3) menus 삭제 (메뉴 자체)
+    // 4) menus 삭제 (메뉴 자체)
     const { error: menuDeleteError } = await supabaseAdmin
       .from("menus")
       .delete()
@@ -423,8 +494,12 @@ export async function DELETE(
     );
   } catch (err) {
     console.error("DELETE /family/[familyId]/menus error:", err);
+    console.error("에러 상세:", err instanceof Error ? err.stack : String(err));
     return NextResponse.json(
-      { error: "서버 에러가 발생했습니다." },
+      { 
+        error: "서버 에러가 발생했습니다.",
+        details: err instanceof Error ? err.message : String(err)
+      },
       { status: 500 }
     );
   }
