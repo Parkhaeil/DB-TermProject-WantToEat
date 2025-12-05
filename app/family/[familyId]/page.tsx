@@ -250,8 +250,8 @@ export default function FamilyDetailPage() {
 
       {/* 메인 콘텐츠 */}
       <div className="flex flex-1 justify-center items-start w-full px-60 pt-10 pb-20 gap-8">
-        <FamilyLeftSection />
-        <FamilyRightSection />
+        <FamilyLeftSection userRole={currentFamilyRole} />
+        <FamilyRightSection userRole={currentFamilyRole} />
       </div>
 
       {/* 초대코드 모달 */}

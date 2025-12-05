@@ -34,7 +34,12 @@ type TodayMenu = {
   author: string;
   roleLabel: string;
   ingredients: MenuIngredient[];
-  likes: number;
+};
+
+type TodayMenuCardProps = TodayMenu & {
+  onDeleteTodayMenu?: () => void;
+  onCopyToFamily?: () => void;
+  userRole?: "PARENT" | "CHILD" | "FOLLOWER";
 };
 
 // 오늘의 메뉴 더미
@@ -50,7 +55,6 @@ const todayMenuDummy: TodayMenu = {
     { ingredient_id: 3, ingredient_name: "두부", storage_type: "FRIDGE" },
     { ingredient_id: 4, ingredient_name: "대파", storage_type: "NEED" },
   ],
-  likes: 5,
 };
 
 // 재료 태그 컴포넌트
@@ -85,8 +89,10 @@ function TodayMenuCard({
   author,
   roleLabel,
   ingredients,
-  likes,
-}: TodayMenu) {
+  onDeleteTodayMenu,
+  onCopyToFamily,
+  userRole,
+}: TodayMenuCardProps) {
   const stockedIngredients = ingredients.filter(
     (ing) => ing.storage_type !== "NEED"
   );
@@ -94,10 +100,7 @@ function TodayMenuCard({
     (ing) => ing.storage_type === "NEED"
   );
 
-  const [isLiked, setIsLiked] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const displayLikeCount = likes + (isLiked ? 1 : 0);
 
   return (
     <div className="w-full bg-[#FFFFFF] border border-[#E7E1DA] rounded-2xl px-4 py-4 flex flex-col gap-3">
@@ -112,35 +115,41 @@ function TodayMenuCard({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsMenuOpen((p) => !p)}
-          className="p-1 rounded-full hover:bg-[#F5F0EC]"
-        >
-          <MoreVertical size={16} className="text-[#C2B5A8]" />
-        </button>
+        {userRole === "PARENT" && (
+          <>
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen((p) => !p)}
+              className="p-1 rounded-full hover:bg-[#F5F0EC]"
+            >
+              <MoreVertical size={16} className="text-[#C2B5A8]" />
+            </button>
 
-        {isMenuOpen && (
-          <div className="absolute right-0 mt-1 w-40 bg-white border border-[#E7E1DA] rounded-xl shadow-lg text-[12px] z-20">
-            <button className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]">
-              수정
-            </button>
-            <button className="w-full text-left px-3 py-2 hover:bg-[#FFF3F0] text-[#C94F3D]">
-              삭제
-            </button>
-            <div className="border-t border-[#F0E6DD]" />
-            <button className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]">
-              내 가족 메뉴로 추가
-            </button>
-          </div>
+            {isMenuOpen && (
+              <div className="absolute right-0 mt-1 w-40 bg-white border border-[#E7E1DA] rounded-xl shadow-lg text-[12px] z-20 overflow-hidden">
+                {onDeleteTodayMenu && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onDeleteTodayMenu();
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]"
+                  >
+                    오늘의 메뉴 삭제
+                  </button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* 재료 */}
       {stockedIngredients.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {stockedIngredients.map((i) => (
-            <FridgeTag key={i.ingredient_id} label={i.ingredient_name} />
+          {stockedIngredients.map((i, idx) => (
+            <FridgeTag key={i.ingredient_id || `${i.ingredient_name}-${idx}`} label={i.ingredient_name} />
           ))}
         </div>
       )}
@@ -152,9 +161,9 @@ function TodayMenuCard({
             사야 할 재료
           </div>
           <div className="flex flex-wrap gap-2">
-            {neededIngredients.map((i) => (
+            {neededIngredients.map((i, idx) => (
               <span
-                key={i.ingredient_id}
+                key={i.ingredient_id || `${i.ingredient_name}-${idx}`}
                 className="px-2 py-1 rounded-full bg-[#FFF5F0] border border-dashed border-[#F2B8A3] text-[10px] text-[#C36037]"
               >
                 {i.ingredient_name}
@@ -163,19 +172,6 @@ function TodayMenuCard({
           </div>
         </div>
       )}
-
-      {/* 좋아요 */}
-      <button
-        onClick={() => setIsLiked((p) => !p)}
-        className="flex items-center gap-1 text-[14px] w-fit"
-      >
-        <Heart
-          size={14}
-          className={isLiked ? "text-[#E84848]" : "text-[#32241B]"}
-          fill={isLiked ? "#E84848" : "none"}
-        />
-        <span>{displayLikeCount}</span>
-      </button>
     </div>
   );
 }
@@ -184,7 +180,7 @@ type SimpleStorage = "FREEZER" | "FRIDGE" | "ROOM";
 
 const storageMeta: Record<
   SimpleStorage,
-  { label: string; icon: JSX.Element; colorClass: string }
+  { label: string; icon: React.ReactElement; colorClass: string }
 > = {
   FREEZER: {
     label: "냉동실",
@@ -203,11 +199,19 @@ const storageMeta: Record<
   },
 };
 
-export default function FamilyRightSection() {
+type FamilyRightSectionProps = {
+  userRole?: "PARENT" | "CHILD" | "FOLLOWER";
+};
+
+export default function FamilyRightSection({ userRole }: FamilyRightSectionProps = {}) {
   const params = useParams();
   const familyIdParam = params?.familyId;
 
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+  
+  // 오늘의 메뉴 상태
+  const [todayMenu, setTodayMenu] = useState<TodayMenu | null>(null);
+  const [isLoadingTodayMenu, setIsLoadingTodayMenu] = useState(false);
 
   // 냉장고 아이템 (서버 + 클라이언트 추가)
   const [freezerItems, setFreezerItems] = useState<string[]>([]);
@@ -260,9 +264,170 @@ export default function FamilyRightSection() {
     }
   };
 
-  // 초기 냉장고 데이터 로딩
+  // 오늘의 메뉴 불러오기
+  const reloadTodayMenu = async () => {
+    if (!familyIdParam) return;
+    if (typeof window === "undefined") return;
+
+    try {
+      setIsLoadingTodayMenu(true);
+      const familyIdNum = Number(familyIdParam);
+
+      const res = await fetch(
+        `/api/todays_menu?familyId=${familyIdNum}`,
+        {
+          cache: "no-store",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("오늘의 메뉴 조회 에러:", data);
+        setTodayMenu(null);
+        return;
+      }
+
+      // 데이터가 없으면 null로 설정
+      if (!data.data) {
+        setTodayMenu(null);
+        return;
+      }
+
+      // API 응답 데이터를 TodayMenu 타입으로 변환
+      const apiData = data.data;
+      setTodayMenu({
+        menu_id: apiData.menu_id,
+        menu_name: apiData.menu_name,
+        status: apiData.status || "POSSIBLE",
+        author: apiData.creator_nickname || "알 수 없음",
+        roleLabel: apiData.role_label || "팔로워",
+        ingredients: apiData.ingredients || [],
+      });
+    } catch (err) {
+      console.error("오늘의 메뉴 정보를 불러오는 중 오류:", err);
+      setTodayMenu(null);
+    } finally {
+      setIsLoadingTodayMenu(false);
+    }
+  };
+
+  // 내 가족 메뉴로 추가 (오늘의 메뉴를 가족 메뉴로 복사)
+  const handleCopyTodayMenuToFamily = async () => {
+    if (!todayMenu) {
+      alert("메뉴 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    if (!familyIdParam) {
+      alert("가족 ID를 찾을 수 없습니다.");
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+
+    try {
+      const storedUser = localStorage.getItem("currentUser");
+      const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+
+      if (!isLoggedIn || !storedUser) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
+
+      const currentUser = JSON.parse(storedUser);
+      const userId = currentUser.userId;
+      const familyIdNum = Number(familyIdParam);
+
+      if (Number.isNaN(familyIdNum)) {
+        alert("유효하지 않은 가족 ID입니다.");
+        return;
+      }
+
+      // 메뉴 추가 API 호출
+      const res = await fetch(`/family/${familyIdNum}/menus`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: userId,
+          menuName: todayMenu.menu_name,
+          sourceType: "HOME", // 기본값
+          status: "POSSIBLE",
+          selectedIngredients: todayMenu.ingredients
+            .filter((ing) => ing.storage_type !== "NEED")
+            .map((ing) => ({
+              storage: ing.storage_type as "FREEZER" | "FRIDGE" | "ROOM",
+              name: ing.ingredient_name,
+            })),
+          toBuy: todayMenu.ingredients
+            .filter((ing) => ing.storage_type === "NEED")
+            .map((ing) => ing.ingredient_name),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("메뉴 추가 실패:", data);
+        alert(data.error || "메뉴 추가에 실패했습니다.");
+        return;
+      }
+
+      alert(`'${todayMenu.menu_name}'을(를) 내 가족 메뉴로 추가했어요!`);
+    } catch (err) {
+      console.error("메뉴 추가 중 오류:", err);
+      alert("서버 연결 실패");
+    }
+  };
+
+  // 오늘의 메뉴 삭제
+  const handleDeleteTodayMenu = async () => {
+    if (!familyIdParam) {
+      alert("가족 ID를 찾을 수 없습니다.");
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+
+    if (!confirm("오늘의 메뉴를 삭제하시겠습니까?")) {
+      return;
+    }
+
+    try {
+      const familyIdNum = Number(familyIdParam);
+      const targetDate = new Date().toISOString().split("T")[0];
+
+      const res = await fetch(
+        `/api/todays_menu?familyId=${familyIdNum}&targetDate=${targetDate}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("오늘의 메뉴 삭제 실패:", data);
+        alert(data.error || "오늘의 메뉴 삭제에 실패했습니다.");
+        return;
+      }
+
+      alert("오늘의 메뉴가 삭제되었습니다.");
+      
+      // 오늘의 메뉴 다시 불러오기
+      await reloadTodayMenu();
+    } catch (err) {
+      console.error("오늘의 메뉴 삭제 중 오류:", err);
+      alert("서버 연결 실패");
+    }
+  };
+
+  // 초기 냉장고 데이터 로딩 + 오늘의 메뉴 로딩
   useEffect(() => {
     reloadFridge();
+    reloadTodayMenu();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [familyIdParam]);
 
@@ -403,7 +568,22 @@ export default function FamilyRightSection() {
           <div className="text-[14px] font-bold">오늘의 메뉴</div>
         </div>
 
-        <TodayMenuCard {...todayMenuDummy} />
+        {isLoadingTodayMenu ? (
+          <div className="text-[12px] text-[#847062] text-center py-4">
+            불러오는 중...
+          </div>
+        ) : todayMenu ? (
+          <TodayMenuCard
+            {...todayMenu}
+            onDeleteTodayMenu={handleDeleteTodayMenu}
+            onCopyToFamily={handleCopyTodayMenuToFamily}
+            userRole={userRole}
+          />
+        ) : (
+          <div className="text-[12px] text-[#847062] text-center py-4">
+            오늘의 메뉴가 선택되지 않았습니다.
+          </div>
+        )}
       </div>
 
       {/* 냉장고 박스 + 재료 추가 팝오버 */}
