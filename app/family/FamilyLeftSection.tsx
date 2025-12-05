@@ -10,7 +10,7 @@ import {
   MoreVertical,
   Heart,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import type { ChangeEvent } from "react";
 import AddMenuModal from "./AddMenuModal";
@@ -63,63 +63,6 @@ type MenuItem = {
   sourceType?: "HOME" | "EAT_OUT"; // 집밥/외식 정보
 };
 
-const dummyMenus: MenuItem[] = [
-  {
-    menu_id: 1,
-    menu_name: "김치찌개",
-    status: "POSSIBLE",
-    author: "이유민",
-    roleLabel: "부모",
-    ingredients: [
-      { ingredient_id: 1, ingredient_name: "김치", storage_type: "FRIDGE" },
-      { ingredient_id: 2, ingredient_name: "양파", storage_type: "ROOM" },
-      { ingredient_id: 3, ingredient_name: "두부", storage_type: "FRIDGE" },
-      { ingredient_id: 4, ingredient_name: "대파", storage_type: "NEED" },
-    ],
-    likes: 5,
-    sourceType: "HOME",
-  },
-  {
-    menu_id: 2,
-    menu_name: "된장찌개",
-    status: "POSSIBLE",
-    author: "서혜민",
-    roleLabel: "군식구",
-    ingredients: [
-      { ingredient_id: 5, ingredient_name: "된장", storage_type: "ROOM" },
-      { ingredient_id: 6, ingredient_name: "애호박", storage_type: "NEED" },
-      { ingredient_id: 7, ingredient_name: "버섯", storage_type: "FRIDGE" },
-    ],
-    likes: 3,
-    sourceType: "HOME",
-  },
-  {
-    menu_id: 3,
-    menu_name: "연어덮밥",
-    status: "WISH",
-    author: "이유민",
-    roleLabel: "부모",
-    ingredients: [
-      { ingredient_id: 8, ingredient_name: "연어", storage_type: "NEED" },
-      { ingredient_id: 9, ingredient_name: "양파", storage_type: "ROOM" },
-      { ingredient_id: 10, ingredient_name: "간장소스", storage_type: "ROOM" },
-    ],
-    likes: 8,
-    sourceType: "HOME",
-  },
-  {
-    menu_id: 4,
-    menu_name: "치킨",
-    status: "WISH",
-    author: "이유민",
-    roleLabel: "부모",
-    ingredients: [
-      { ingredient_id: 11, ingredient_name: "치킨", storage_type: "NEED" },
-    ],
-    likes: 2,
-    sourceType: "EAT_OUT",
-  },
-];
 
 /* ===========================
    메뉴 카드 컴포넌트
@@ -305,7 +248,45 @@ export default function FamilyLeftSection() {
   } | null>(null);
 
   // ✅ 메뉴를 state로 관리
-  const [menus, setMenus] = useState<MenuItem[]>(dummyMenus);
+  const [menus, setMenus] = useState<MenuItem[]>([]);
+  const [isLoadingMenus, setIsLoadingMenus] = useState(true);
+
+  // 메뉴 목록 조회 함수
+  const fetchMenus = async () => {
+    if (!familyIdParam) return;
+
+    const familyIdNum = Number(familyIdParam);
+    if (Number.isNaN(familyIdNum)) {
+      console.error("유효하지 않은 가족 ID입니다.");
+      setIsLoadingMenus(false);
+      return;
+    }
+
+    try {
+      setIsLoadingMenus(true);
+      const res = await fetch(`/family/${familyIdNum}/menus`);
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error("메뉴 조회 실패:", json);
+        alert(json.error || "메뉴 조회 실패");
+        setIsLoadingMenus(false);
+        return;
+      }
+
+      setMenus(json || []);
+    } catch (err) {
+      console.error("메뉴 조회 요청 에러:", err);
+      alert("서버 연결 실패");
+    } finally {
+      setIsLoadingMenus(false);
+    }
+  };
+
+  // 컴포넌트 마운트 시 메뉴 목록 조회
+  useEffect(() => {
+    fetchMenus();
+  }, [familyIdParam]);
 
   const handleAddMenuToServer = async (data: {
     menuName: string;
@@ -372,34 +353,8 @@ export default function FamilyLeftSection() {
 
       console.log("메뉴 추가 성공:", json);
 
-      const maxId = menus.reduce(
-        (acc, m) => (m.menu_id > acc ? m.menu_id : acc),
-        0
-      );
-
-      const newMenu: MenuItem = {
-        menu_id: maxId + 1,
-        menu_name: data.menuName,
-        status: data.status ?? "POSSIBLE",
-        author: "나", // TODO: 실제 사용자 닉네임으로 교체 가능
-        roleLabel: "부모", // TODO: 실제 역할 정보로 교체 가능
-        ingredients: [
-          ...(data.selectedIngredients || []).map((ing) => ({
-            ingredient_id: Math.random(),
-            ingredient_name: ing.name,
-            storage_type: ing.storage,
-          })),
-          ...(data.toBuy || []).map((name) => ({
-            ingredient_id: Math.random(),
-            ingredient_name: name,
-            storage_type: "NEED" as const,
-          })),
-        ],
-        likes: 0,
-        sourceType: data.sourceType,
-      };
-
-      setMenus((prev) => [...prev, newMenu]);
+      // 메뉴 추가 후 목록 새로고침
+      await fetchMenus();
     } catch (err) {
       console.error("메뉴 추가 요청 에러:", err);
       alert("서버 연결 실패");
@@ -489,8 +444,52 @@ export default function FamilyLeftSection() {
   };
 
   // 메뉴 삭제
-  const handleDeleteMenu = (menuId: number) => {
-    setMenus((prev) => prev.filter((m) => m.menu_id !== menuId));
+  const handleDeleteMenu = async (menuId: number) => {
+    if (!familyIdParam) {
+      alert("가족 ID를 찾을 수 없습니다.");
+      return;
+    }
+
+    const familyIdNum = Number(familyIdParam);
+    if (Number.isNaN(familyIdNum)) {
+      alert("유효하지 않은 가족 ID입니다.");
+      return;
+    }
+
+    // 삭제 확인
+    const menuToDelete = menus.find((m) => m.menu_id === menuId);
+    const confirmMessage = menuToDelete
+      ? `'${menuToDelete.menu_name}' 메뉴를 정말 삭제하시겠습니까?\n\n이 메뉴가 오늘의 메뉴로 설정되어 있다면, 삭제 후 오늘의 메뉴는 미정으로 변경됩니다. 괜찮으신가요?`
+      : "이 메뉴를 정말 삭제하시겠습니까?\n\n이 메뉴가 오늘의 메뉴로 설정되어 있다면, 삭제 후 오늘의 메뉴는 미정으로 변경됩니다. 괜찮으신가요?";
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `/family/${familyIdNum}/menus?menuId=${menuId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error("메뉴 삭제 실패:", json);
+        alert(json.error || "메뉴 삭제 실패");
+        return;
+      }
+
+      console.log("메뉴 삭제 성공:", json);
+
+      // 삭제 후 목록 새로고침
+      await fetchMenus();
+    } catch (err) {
+      console.error("메뉴 삭제 요청 에러:", err);
+      alert("서버 연결 실패");
+    }
   };
 
   // 메뉴 복사 - 가족 선택 모달 먼저 띄우기
@@ -652,33 +651,51 @@ export default function FamilyLeftSection() {
       </div>
 
       {/* 상태별 열 정렬 */}
-      <div className="grid grid-cols-2 gap-5 w-230">
-        <div className="flex flex-col gap-5">
-          {possibleMenus.map((m) => (
-            <MenuCard
-              key={m.menu_id}
-              {...m}
-              onEdit={() => handleEditMenu(m)}
-              onDelete={() => handleDeleteMenu(m.menu_id)}
-              onCopy={() => handleCopyMenu(m)}
-              onDecideToday={() => handleDecideToday(m)}
-            />
-          ))}
+      {isLoadingMenus ? (
+        <div className="flex justify-center items-center py-10 text-[14px] text-[#A28B78]">
+          메뉴를 불러오는 중...
         </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-5 w-230">
+          <div className="flex flex-col gap-5">
+            {possibleMenus.length === 0 ? (
+              <div className="text-[12px] text-[#A28B78] text-center py-4">
+                가능한 메뉴가 없습니다
+              </div>
+            ) : (
+              possibleMenus.map((m) => (
+                <MenuCard
+                  key={m.menu_id}
+                  {...m}
+                  onEdit={() => handleEditMenu(m)}
+                  onDelete={() => handleDeleteMenu(m.menu_id)}
+                  onCopy={() => handleCopyMenu(m)}
+                  onDecideToday={() => handleDecideToday(m)}
+                />
+              ))
+            )}
+          </div>
 
-        <div className="flex flex-col gap-5">
-          {wishMenus.map((m) => (
-            <MenuCard
-              key={m.menu_id}
-              {...m}
-              onEdit={() => handleEditMenu(m)}
-              onDelete={() => handleDeleteMenu(m.menu_id)}
-              onCopy={() => handleCopyMenu(m)}
-              onDecideToday={() => handleDecideToday(m)}
-            />
-          ))}
+          <div className="flex flex-col gap-5">
+            {wishMenus.length === 0 ? (
+              <div className="text-[12px] text-[#A28B78] text-center py-4">
+                먹고 싶은 메뉴가 없습니다
+              </div>
+            ) : (
+              wishMenus.map((m) => (
+                <MenuCard
+                  key={m.menu_id}
+                  {...m}
+                  onEdit={() => handleEditMenu(m)}
+                  onDelete={() => handleDeleteMenu(m.menu_id)}
+                  onCopy={() => handleCopyMenu(m)}
+                  onDecideToday={() => handleDecideToday(m)}
+                />
+              ))
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 가족 선택 모달 */}
       <SelectFamilyModal
@@ -703,29 +720,8 @@ export default function FamilyLeftSection() {
         onSubmit={async (data) => {
           if (editingMenu) {
             // TODO: 수정 모드도 나중에 서버 API와 연동
-            setMenus((prev) =>
-              prev.map((m) =>
-                m.menu_id === editingMenu.menu_id
-                  ? {
-                      ...m,
-                      menu_name: data.menuName,
-                      status: data.status ?? m.status,
-                      ingredients: [
-                        ...(data.selectedIngredients || []).map((ing) => ({
-                          ingredient_id: Math.random(),
-                          ingredient_name: ing.name,
-                          storage_type: ing.storage,
-                        })),
-                        ...(data.toBuy || []).map((name) => ({
-                          ingredient_id: Math.random(),
-                          ingredient_name: name,
-                          storage_type: "NEED" as const,
-                        })),
-                      ],
-                    }
-                  : m
-              )
-            );
+            // 현재는 추가 API를 사용하여 처리
+            await handleAddMenuToServer(data);
           } else {
             // 추가 모드 및 복사 모드는 공통으로 서버에 메뉴 생성
             await handleAddMenuToServer(data);
