@@ -115,25 +115,32 @@ export async function GET(
         const menuId = menu.menu_id as number;
         const createdBy = menu.created_by as number;
 
-        // 2-1) 사용자 정보 조회 (nickname)
+        // 2-1) 사용자 정보 조회 (nickname, is_active)
         const { data: user, error: userError } = await supabaseAdmin
           .from("users")
-          .select("nickname")
+          .select("nickname, is_active")
           .eq("user_id", createdBy)
           .single();
 
         const author = user?.nickname || "알 수 없음";
+        const userIsActive = user?.is_active === true; // 명시적으로 true만 활성
 
-        // 2-2) 가족 멤버 역할 조회
+        // 2-2) 가족 멤버 역할 조회 (is_active도 함께 확인)
         const { data: member, error: memberError } = await supabaseAdmin
           .from("family_members")
-          .select("role")
+          .select("role, is_active")
           .eq("family_id", familyId)
           .eq("user_id", createdBy)
           .single();
 
+        // users.is_active가 false이거나 family_members.is_active가 false면 탈퇴함
+        const memberIsActive = member?.is_active === true;
+        const isActive = userIsActive && memberIsActive;
+
         let roleLabel = "멤버";
-        if (member?.role === "PARENT") roleLabel = "부모";
+        if (!isActive) {
+          roleLabel = "탈퇴함";
+        } else if (member?.role === "PARENT") roleLabel = "부모";
         else if (member?.role === "CHILD") roleLabel = "자녀";
         else if (member?.role === "FOLLOWER") roleLabel = "군식구";
 

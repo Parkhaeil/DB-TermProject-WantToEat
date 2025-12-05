@@ -307,12 +307,17 @@ export default function FamilyRightSection({
 
       // API 응답 데이터를 TodayMenu 타입으로 변환
       const apiData = data.data;
+      const creatorIsActive = apiData.creator_is_active !== false; // 기본값은 true
+      const roleLabel = creatorIsActive 
+        ? (apiData.role_label || "팔로워")
+        : "탈퇴함";
+      
       setTodayMenu({
         menu_id: apiData.menu_id,
         menu_name: apiData.menu_name,
         status: apiData.status || "POSSIBLE",
         author: apiData.creator_nickname || "알 수 없음",
-        roleLabel: apiData.role_label || "팔로워",
+        roleLabel: roleLabel,
         ingredients: apiData.ingredients || [],
       });
     } catch (err) {

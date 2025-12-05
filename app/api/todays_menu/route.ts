@@ -72,8 +72,13 @@ export async function GET(req: Request) {
       }
     }
 
+    // creator의 is_active 확인
+    const creatorIsActive = firstRow.creator_is_active !== false; // 기본값은 true
+
     let roleLabel = "팔로워";
-    if (firstRow.creator_role === "PARENT") roleLabel = "부모";
+    if (!creatorIsActive) {
+      roleLabel = "탈퇴함";
+    } else if (firstRow.creator_role === "PARENT") roleLabel = "부모";
     else if (firstRow.creator_role === "CHILD") roleLabel = "자식";
     else if (firstRow.creator_role === "FOLLOWER") roleLabel = "팔로워";
 
@@ -86,6 +91,7 @@ export async function GET(req: Request) {
       target_date: firstRow.target_date,
       creator_nickname: firstRow.creator_nickname,
       creator_role: firstRow.creator_role,
+      creator_is_active: creatorIsActive,
       role_label: roleLabel,
       ingredients: ingredients,
     };
