@@ -10,7 +10,7 @@ import {
   MoreVertical,
   Heart,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import type { ChangeEvent } from "react";
 import AddMenuModal from "./AddMenuModal";
@@ -251,8 +251,8 @@ export default function FamilyLeftSection() {
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [isLoadingMenus, setIsLoadingMenus] = useState(true);
 
-  // 메뉴 목록 조회 함수
-  const fetchMenus = async () => {
+  // 메뉴 목록 조회 함수 (날짜 파라미터 추가)
+  const fetchMenus = useCallback(async (targetDate: Date) => {
     if (!familyIdParam) return;
 
     const familyIdNum = Number(familyIdParam);
@@ -264,7 +264,11 @@ export default function FamilyLeftSection() {
 
     try {
       setIsLoadingMenus(true);
-      const res = await fetch(`/family/${familyIdNum}/menus`);
+      
+      // 날짜 파라미터 생성 (YYYY-MM-DD 형식)
+      const dateStr = formatInputDate(targetDate);
+      
+      const res = await fetch(`/family/${familyIdNum}/menus?date=${dateStr}`);
       const json = await res.json();
 
       if (!res.ok) {
@@ -281,12 +285,21 @@ export default function FamilyLeftSection() {
     } finally {
       setIsLoadingMenus(false);
     }
-  };
-
-  // 컴포넌트 마운트 시 메뉴 목록 조회
-  useEffect(() => {
-    fetchMenus();
   }, [familyIdParam]);
+
+  // 컴포넌트 마운트 시 및 familyIdParam 변경 시 메뉴 목록 조회
+  useEffect(() => {
+    if (familyIdParam) {
+      fetchMenus(selectedDate);
+    }
+  }, [familyIdParam, fetchMenus]);
+
+  // selectedDate 변경 시 메뉴 목록 조회
+  useEffect(() => {
+    if (familyIdParam) {
+      fetchMenus(selectedDate);
+    }
+  }, [selectedDate, familyIdParam, fetchMenus]);
 
   const handleAddMenuToServer = async (data: {
     menuName: string;
@@ -353,8 +366,8 @@ export default function FamilyLeftSection() {
 
       console.log("메뉴 추가 성공:", json);
 
-      // 메뉴 추가 후 목록 새로고침
-      await fetchMenus();
+      // 메뉴 추가 후 목록 새로고침 (현재 선택된 날짜 기준)
+      await fetchMenus(selectedDate);
     } catch (err) {
       console.error("메뉴 추가 요청 에러:", err);
       alert("서버 연결 실패");
@@ -484,8 +497,8 @@ export default function FamilyLeftSection() {
 
       console.log("메뉴 삭제 성공:", json);
 
-      // 삭제 후 목록 새로고침
-      await fetchMenus();
+      // 삭제 후 목록 새로고침 (현재 선택된 날짜 기준)
+      await fetchMenus(selectedDate);
     } catch (err) {
       console.error("메뉴 삭제 요청 에러:", err);
       alert("서버 연결 실패");

@@ -51,11 +51,41 @@ export async function GET(
       );
     }
 
-    // 1) 메뉴 목록 조회
-    const { data: menus, error: menusError } = await supabaseAdmin
+    // URL에서 날짜 파라미터 추출 (예: /family/1/menus?date=2024-01-15)
+    const url = new URL(req.url);
+    const dateParam = url.searchParams.get("date");
+    
+    let dateFilter = supabaseAdmin
       .from("menus")
       .select("menu_id, menu_name, status, source_type, created_by, created_at")
-      .eq("family_id", familyId)
+      .eq("family_id", familyId);
+
+    // 날짜 파라미터가 있으면 해당 날짜로 필터링
+    if (dateParam) {
+      try {
+        const targetDate = new Date(dateParam);
+        if (!isNaN(targetDate.getTime())) {
+          // 날짜의 시작 시간 (00:00:00)
+          const startDate = new Date(targetDate);
+          startDate.setHours(0, 0, 0, 0);
+          
+          // 날짜의 끝 시간 (23:59:59.999)
+          const endDate = new Date(targetDate);
+          endDate.setHours(23, 59, 59, 999);
+
+          // created_at이 해당 날짜 범위 내에 있는 메뉴만 조회
+          dateFilter = dateFilter
+            .gte("created_at", startDate.toISOString())
+            .lte("created_at", endDate.toISOString());
+        }
+      } catch (err) {
+        console.error("날짜 파라미터 파싱 에러:", err);
+        // 날짜 파싱 실패 시 날짜 필터 없이 진행
+      }
+    }
+
+    // 1) 메뉴 목록 조회
+    const { data: menus, error: menusError } = await dateFilter
       .order("created_at", { ascending: false });
 
     if (menusError) {
