@@ -158,6 +158,13 @@ export default function FamilyDetailPage() {
   const currentFamilyRole: Role = familyInfo?.role ?? "FOLLOWER";
   const memberCount = familyInfo?.member_count ?? members.length;
 
+  // 날짜 상태 관리 (왼쪽 섹션과 오른쪽 섹션 공유)
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now;
+  });
+
   // 역할 변경 핸들러
   const handleChangeRole = async (targetUserId: number, newRole: Role) => {
     if (!currentUser) {
@@ -387,8 +394,15 @@ export default function FamilyDetailPage() {
 
       {/* 메인 콘텐츠 */}
       <div className="flex flex-1 justify-center items-start w-full px-60 pt-10 pb-20 gap-8">
-        <FamilyLeftSection userRole={currentFamilyRole} />
-        <FamilyRightSection userRole={currentFamilyRole} />
+        <FamilyLeftSection 
+          userRole={currentFamilyRole} 
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+        />
+        <FamilyRightSection 
+          userRole={currentFamilyRole} 
+          selectedDate={selectedDate}
+        />
       </div>
 
       {/* 초대코드 모달 */}

@@ -273,18 +273,17 @@ function MenuCard({
 
 type FamilyLeftSectionProps = {
   userRole?: "PARENT" | "CHILD" | "FOLLOWER";
+  selectedDate: Date;
+  onDateChange: (date: Date) => void;
 };
 
-export default function FamilyLeftSection({ userRole }: FamilyLeftSectionProps = {}) {
+export default function FamilyLeftSection({ 
+  userRole, 
+  selectedDate, 
+  onDateChange 
+}: FamilyLeftSectionProps) {
   const params = useParams();
   const familyIdParam = params?.familyId;
-
-  const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    const now = new Date();
-    // 로컬 시간 기준으로 오늘 날짜 설정 (시간은 00:00:00)
-    now.setHours(0, 0, 0, 0);
-    return now;
-  });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [sortType, setSortType] = useState<"latest" | "popular">("latest");
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -474,27 +473,23 @@ export default function FamilyLeftSection({ userRole }: FamilyLeftSectionProps =
   ];
 
   const handlePrevDay = () => {
-    setSelectedDate((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() - 1);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    });
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() - 1);
+    d.setHours(0, 0, 0, 0);
+    onDateChange(d);
   };
 
   const handleNextDay = () => {
-    setSelectedDate((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() + 1);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    });
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + 1);
+    d.setHours(0, 0, 0, 0);
+    onDateChange(d);
   };
 
   const handleToday = () => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    setSelectedDate(now);
+    onDateChange(now);
   };
 
   const handleDateChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -502,7 +497,7 @@ export default function FamilyLeftSection({ userRole }: FamilyLeftSectionProps =
     const [year, month, day] = e.target.value.split("-").map(Number);
     // 로컬 시간 기준으로 날짜 생성
     const d = new Date(year, month - 1, day, 0, 0, 0, 0);
-    setSelectedDate(d);
+    onDateChange(d);
     setIsCalendarOpen(false);
   };
 

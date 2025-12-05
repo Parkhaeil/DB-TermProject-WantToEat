@@ -201,9 +201,13 @@ const storageMeta: Record<
 
 type FamilyRightSectionProps = {
   userRole?: "PARENT" | "CHILD" | "FOLLOWER";
+  selectedDate: Date;
 };
 
-export default function FamilyRightSection({ userRole }: FamilyRightSectionProps = {}) {
+export default function FamilyRightSection({ 
+  userRole, 
+  selectedDate 
+}: FamilyRightSectionProps) {
   const params = useParams();
   const familyIdParam = params?.familyId;
 
@@ -264,8 +268,8 @@ export default function FamilyRightSection({ userRole }: FamilyRightSectionProps
     }
   };
 
-  // 오늘의 메뉴 불러오기
-  const reloadTodayMenu = async () => {
+  // 오늘의 메뉴 불러오기 (날짜 파라미터 추가)
+  const reloadTodayMenu = async (targetDate?: Date) => {
     if (!familyIdParam) return;
     if (typeof window === "undefined") return;
 
@@ -273,8 +277,15 @@ export default function FamilyRightSection({ userRole }: FamilyRightSectionProps
       setIsLoadingTodayMenu(true);
       const familyIdNum = Number(familyIdParam);
 
+      // 날짜 파라미터 생성 (YYYY-MM-DD 형식)
+      const dateToUse = targetDate || new Date();
+      const year = dateToUse.getFullYear();
+      const month = String(dateToUse.getMonth() + 1).padStart(2, "0");
+      const day = String(dateToUse.getDate()).padStart(2, "0");
+      const dateStr = `${year}-${month}-${day}`;
+
       const res = await fetch(
-        `/api/todays_menu?familyId=${familyIdNum}`,
+        `/api/todays_menu?familyId=${familyIdNum}&targetDate=${dateStr}`,
         {
           cache: "no-store",
         }
@@ -397,9 +408,8 @@ export default function FamilyRightSection({ userRole }: FamilyRightSectionProps
 
     try {
       const familyIdNum = Number(familyIdParam);
-      // 타임존 문제 방지: 로컬 날짜만 사용
-      const now = new Date();
-      const targetDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      // 타임존 문제 방지: 로컬 날짜만 사용 (selectedDate 사용)
+      const targetDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
 
       const res = await fetch(
         `/api/todays_menu?familyId=${familyIdNum}&targetDate=${targetDate}`,
@@ -419,7 +429,7 @@ export default function FamilyRightSection({ userRole }: FamilyRightSectionProps
       alert("오늘의 메뉴가 삭제되었습니다.");
       
       // 오늘의 메뉴 다시 불러오기
-      await reloadTodayMenu();
+      await reloadTodayMenu(selectedDate);
     } catch (err) {
       console.error("오늘의 메뉴 삭제 중 오류:", err);
       alert("서버 연결 실패");
@@ -429,9 +439,9 @@ export default function FamilyRightSection({ userRole }: FamilyRightSectionProps
   // 초기 냉장고 데이터 로딩 + 오늘의 메뉴 로딩
   useEffect(() => {
     reloadFridge();
-    reloadTodayMenu();
+    reloadTodayMenu(selectedDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [familyIdParam]);
+  }, [familyIdParam, selectedDate]);
 
   const handleAddIngredient = async () => {
     const name = newName.trim();
