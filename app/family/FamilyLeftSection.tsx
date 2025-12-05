@@ -16,6 +16,7 @@ import type { ChangeEvent } from "react";
 import AddMenuModal from "./AddMenuModal";
 import SelectFamilyModal from "./SelectFamilyModal";
 
+// 로컬 시간 기준으로 날짜 처리 (브라우저의 로컬 시간대 사용)
 function formatKoreanDate(date: Date) {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
@@ -60,6 +61,7 @@ type MenuItem = {
   roleLabel: string;
   ingredients: MenuIngredient[];
   likes: number;
+  isLiked: boolean; // 현재 사용자가 좋아요를 눌렀는지 여부
   sourceType?: "HOME" | "EAT_OUT"; // 집밥/외식 정보
 };
 
@@ -73,6 +75,9 @@ type MenuCardProps = MenuItem & {
   onDelete: () => void;
   onCopy: () => void;
   onDecideToday: () => void;
+  onToggleLike: (menuId: number, currentIsLiked: boolean) => Promise<void>;
+  familyId: number;
+  userId: number;
 };
 
 function MenuCard({
@@ -82,10 +87,14 @@ function MenuCard({
   roleLabel,
   ingredients,
   likes,
+  isLiked: initialIsLiked,
   onEdit,
   onDelete,
   onCopy,
   onDecideToday,
+  onToggleLike,
+  familyId,
+  userId,
 }: MenuCardProps) {
   const stockedIngredients = ingredients.filter(
     (ing) => ing.storage_type !== "NEED"
@@ -94,15 +103,41 @@ function MenuCard({
     (ing) => ing.storage_type === "NEED"
   );
 
-  const [isLiked, setIsLiked] = useState(false);
+  const [isLiked, setIsLiked] = useState(initialIsLiked);
+  const [likeCount, setLikeCount] = useState(likes);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLikeLoading, setIsLikeLoading] = useState(false);
 
-  const handleToggleLike = () => {
-    const next = !isLiked;
-    setIsLiked(next);
+  // initialIsLiked가 변경되면 상태 업데이트
+  useEffect(() => {
+    setIsLiked(initialIsLiked);
+  }, [initialIsLiked]);
+
+  useEffect(() => {
+    setLikeCount(likes);
+  }, [likes]);
+
+  const handleToggleLike = async () => {
+    if (isLikeLoading) return; // 중복 요청 방지
+
+    const nextIsLiked = !isLiked;
+    
+    // 낙관적 업데이트 (즉시 UI 업데이트)
+    setIsLiked(nextIsLiked);
+    setLikeCount((prev) => (nextIsLiked ? prev + 1 : prev - 1));
+    setIsLikeLoading(true);
+
+    try {
+      await onToggleLike(menu_id, nextIsLiked);
+    } catch (err) {
+      // 실패 시 롤백
+      setIsLiked(!nextIsLiked);
+      setLikeCount((prev) => (nextIsLiked ? prev - 1 : prev + 1));
+      console.error("좋아요 토글 실패:", err);
+    } finally {
+      setIsLikeLoading(false);
+    }
   };
-
-  const displayLikeCount = likes + (isLiked ? 1 : 0);
 
   const handleClickMenuAction = (
     action: "edit" | "delete" | "copy" | "today",
@@ -214,14 +249,15 @@ function MenuCard({
       <button
         type="button"
         onClick={handleToggleLike}
-        className="flex items-center gap-1 text-[14px] text-[#32241B] w-fit active:scale-95 transition-transform"
+        disabled={isLikeLoading}
+        className="flex items-center gap-1 text-[14px] text-[#32241B] w-fit active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Heart
           size={14}
           className={isLiked ? "text-[#E84848]" : "text-[#32241B]"}
           fill={isLiked ? "#E84848" : "none"}
         />
-        <span>{displayLikeCount}</span>
+        <span>{likeCount}</span>
       </button>
     </div>
   );
@@ -235,7 +271,12 @@ export default function FamilyLeftSection() {
   const params = useParams();
   const familyIdParam = params?.familyId;
 
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const now = new Date();
+    // 로컬 시간 기준으로 오늘 날짜 설정 (시간은 00:00:00)
+    now.setHours(0, 0, 0, 0);
+    return now;
+  });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [sortType, setSortType] = useState<"latest" | "popular">("latest");
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -251,6 +292,32 @@ export default function FamilyLeftSection() {
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [isLoadingMenus, setIsLoadingMenus] = useState(true);
 
+  // 현재 사용자 정보 가져오기
+  const getCurrentUser = () => {
+    const storedUser =
+      typeof window !== "undefined"
+        ? localStorage.getItem("currentUser")
+        : null;
+    const isLoggedIn =
+      typeof window !== "undefined" &&
+      localStorage.getItem("isLoggedIn") === "true";
+
+    if (!isLoggedIn || !storedUser) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(storedUser) as {
+        userId: number;
+        email: string;
+        nickname: string;
+      };
+    } catch (e) {
+      console.error("currentUser 파싱 에러:", e);
+      return null;
+    }
+  };
+
   // 메뉴 목록 조회 함수 (날짜 파라미터 추가)
   const fetchMenus = useCallback(async (targetDate: Date) => {
     if (!familyIdParam) return;
@@ -262,13 +329,21 @@ export default function FamilyLeftSection() {
       return;
     }
 
+    const currentUser = getCurrentUser();
+    const userId = currentUser?.userId;
+
     try {
       setIsLoadingMenus(true);
       
       // 날짜 파라미터 생성 (YYYY-MM-DD 형식)
       const dateStr = formatInputDate(targetDate);
       
-      const res = await fetch(`/family/${familyIdNum}/menus?date=${dateStr}`);
+      // userId가 있으면 쿼리 파라미터에 추가
+      const url = userId
+        ? `/family/${familyIdNum}/menus?date=${dateStr}&userId=${userId}`
+        : `/family/${familyIdNum}/menus?date=${dateStr}`;
+      
+      const res = await fetch(url);
       const json = await res.json();
 
       if (!res.ok) {
@@ -394,6 +469,7 @@ export default function FamilyLeftSection() {
     setSelectedDate((prev) => {
       const d = new Date(prev);
       d.setDate(d.getDate() - 1);
+      d.setHours(0, 0, 0, 0);
       return d;
     });
   };
@@ -402,25 +478,28 @@ export default function FamilyLeftSection() {
     setSelectedDate((prev) => {
       const d = new Date(prev);
       d.setDate(d.getDate() + 1);
+      d.setHours(0, 0, 0, 0);
       return d;
     });
   };
 
   const handleToday = () => {
-    setSelectedDate(new Date());
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    setSelectedDate(now);
   };
 
   const handleDateChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) return;
     const [year, month, day] = e.target.value.split("-").map(Number);
-    const d = new Date();
-    d.setFullYear(year, month - 1, day);
-    d.setHours(0, 0, 0, 0);
+    // 로컬 시간 기준으로 날짜 생성
+    const d = new Date(year, month - 1, day, 0, 0, 0, 0);
     setSelectedDate(d);
     setIsCalendarOpen(false);
   };
 
   const today = new Date();
+  today.setHours(0, 0, 0, 0); // 로컬 시간 기준 오늘 00:00:00
 
   const getDateLabel = (target: Date) => {
     const yesterday = new Date(today);
@@ -454,6 +533,51 @@ export default function FamilyLeftSection() {
   const handleDecideToday = (menu: MenuItem) => {
     console.log("[오늘의 메뉴로 결정]", menu);
     alert(`‘${menu.menu_name}’을(를) 오늘의 메뉴로 결정했어요! (우측 패널 연동 예정)`);
+  };
+
+  // 좋아요 토글 함수
+  const handleToggleLike = async (menuId: number, isLiked: boolean) => {
+    if (!familyIdParam) {
+      alert("가족 ID를 찾을 수 없습니다.");
+      return;
+    }
+
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+
+    const familyIdNum = Number(familyIdParam);
+    if (Number.isNaN(familyIdNum)) {
+      alert("유효하지 않은 가족 ID입니다.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/family/${familyIdNum}/menus`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          menuId,
+          userId: currentUser.userId,
+          isLiked,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error("좋아요 토글 실패:", json);
+        throw new Error(json.error || "좋아요 토글 실패");
+      }
+
+      // 성공 시 메뉴 목록 새로고침하여 좋아요 수 업데이트
+      await fetchMenus(selectedDate);
+    } catch (err) {
+      console.error("좋아요 토글 요청 에러:", err);
+      throw err; // 호출한 곳에서 처리하도록 에러 전달
+    }
   };
 
   // 메뉴 삭제
@@ -669,42 +793,54 @@ export default function FamilyLeftSection() {
           메뉴를 불러오는 중...
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-5 w-230">
-          <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-2 gap-5 w-230">
+        <div className="flex flex-col gap-5">
             {possibleMenus.length === 0 ? (
               <div className="text-[12px] text-[#A28B78] text-center py-4">
                 가능한 메뉴가 없습니다
               </div>
             ) : (
-              possibleMenus.map((m) => (
-                <MenuCard
-                  key={m.menu_id}
-                  {...m}
-                  onEdit={() => handleEditMenu(m)}
-                  onDelete={() => handleDeleteMenu(m.menu_id)}
-                  onCopy={() => handleCopyMenu(m)}
-                  onDecideToday={() => handleDecideToday(m)}
-                />
-              ))
+              possibleMenus.map((m) => {
+                const currentUser = getCurrentUser();
+                return (
+            <MenuCard
+              key={m.menu_id}
+              {...m}
+              onEdit={() => handleEditMenu(m)}
+              onDelete={() => handleDeleteMenu(m.menu_id)}
+              onCopy={() => handleCopyMenu(m)}
+              onDecideToday={() => handleDecideToday(m)}
+                    onToggleLike={handleToggleLike}
+                    familyId={Number(familyIdParam)}
+                    userId={currentUser?.userId || 0}
+            />
+                );
+              })
             )}
-          </div>
+        </div>
 
-          <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-5">
             {wishMenus.length === 0 ? (
               <div className="text-[12px] text-[#A28B78] text-center py-4">
                 먹고 싶은 메뉴가 없습니다
               </div>
             ) : (
-              wishMenus.map((m) => (
-                <MenuCard
-                  key={m.menu_id}
-                  {...m}
-                  onEdit={() => handleEditMenu(m)}
-                  onDelete={() => handleDeleteMenu(m.menu_id)}
-                  onCopy={() => handleCopyMenu(m)}
-                  onDecideToday={() => handleDecideToday(m)}
-                />
-              ))
+              wishMenus.map((m) => {
+                const currentUser = getCurrentUser();
+                return (
+            <MenuCard
+              key={m.menu_id}
+              {...m}
+              onEdit={() => handleEditMenu(m)}
+              onDelete={() => handleDeleteMenu(m.menu_id)}
+              onCopy={() => handleCopyMenu(m)}
+              onDecideToday={() => handleDecideToday(m)}
+                    onToggleLike={handleToggleLike}
+                    familyId={Number(familyIdParam)}
+                    userId={currentUser?.userId || 0}
+            />
+                );
+              })
             )}
           </div>
         </div>

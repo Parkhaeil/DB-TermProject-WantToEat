@@ -33,6 +33,7 @@ type MenuResponse = {
   roleLabel: string;
   ingredients: MenuIngredientResponse[];
   likes: number;
+  isLiked: boolean; // 현재 사용자가 좋아요를 눌렀는지 여부
   sourceType: SourceType;
 };
 
@@ -51,32 +52,40 @@ export async function GET(
       );
     }
 
-    // URL에서 날짜 파라미터 추출 (예: /family/1/menus?date=2024-01-15)
+    // URL에서 날짜 파라미터 및 userId 추출
     const url = new URL(req.url);
     const dateParam = url.searchParams.get("date");
+    const userIdParam = url.searchParams.get("userId");
+    const userId = userIdParam ? Number(userIdParam) : null;
     
     let dateFilter = supabaseAdmin
       .from("menus")
       .select("menu_id, menu_name, status, source_type, created_by, created_at")
       .eq("family_id", familyId);
 
-    // 날짜 파라미터가 있으면 해당 날짜로 필터링
+    // 날짜 파라미터가 있으면 해당 날짜로 필터링 (UTC+9 기준)
     if (dateParam) {
       try {
-        const targetDate = new Date(dateParam);
-        if (!isNaN(targetDate.getTime())) {
-          // 날짜의 시작 시간 (00:00:00)
-          const startDate = new Date(targetDate);
-          startDate.setHours(0, 0, 0, 0);
+        const [year, month, day] = dateParam.split("-").map(Number);
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+          // UTC+9 (한국 시간) 기준으로 날짜 범위 설정
+          // 예: "2024-12-06"을 받으면 한국 시간 2024-12-06 00:00:00 ~ 23:59:59로 해석
+          // 한국 시간 2024-12-06 00:00:00 KST = UTC 2024-12-05 15:00:00
+          // 한국 시간 2024-12-06 23:59:59.999 KST = UTC 2024-12-06 14:59:59.999
           
-          // 날짜의 끝 시간 (23:59:59.999)
-          const endDate = new Date(targetDate);
-          endDate.setHours(23, 59, 59, 999);
+          // 한국 시간(UTC+9) 기준 시작 시간 (00:00:00)을 UTC로 변환
+          // Date.UTC로 UTC 시간을 만들고, 한국 시간을 표현하려면 9시간을 빼야 함
+          const startDateUTC = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+          startDateUTC.setUTCHours(startDateUTC.getUTCHours() - 9);
+          
+          // 한국 시간(UTC+9) 기준 끝 시간 (23:59:59.999)을 UTC로 변환
+          const endDateUTC = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+          endDateUTC.setUTCHours(endDateUTC.getUTCHours() - 9);
 
-          // created_at이 해당 날짜 범위 내에 있는 메뉴만 조회
+          // created_at이 해당 날짜 범위 내에 있는 메뉴만 조회 (UTC 기준)
           dateFilter = dateFilter
-            .gte("created_at", startDate.toISOString())
-            .lte("created_at", endDate.toISOString());
+            .gte("created_at", startDateUTC.toISOString())
+            .lte("created_at", endDateUTC.toISOString());
         }
       } catch (err) {
         console.error("날짜 파라미터 파싱 에러:", err);
@@ -164,8 +173,9 @@ export async function GET(
           }
         }
 
-        // 2-4) 좋아요 수 조회 (menu_likes 테이블이 있는 경우)
+        // 2-4) 좋아요 수 조회 및 현재 사용자의 좋아요 여부 확인
         let likes = 0;
+        let isLiked = false;
         try {
           const { count: likesCount, error: likesError } = await supabaseAdmin
             .from("menu_likes")
@@ -174,6 +184,20 @@ export async function GET(
 
           if (!likesError) {
             likes = likesCount || 0;
+          }
+
+          // 현재 사용자가 좋아요를 눌렀는지 확인
+          if (userId && !Number.isNaN(userId)) {
+            const { data: userLike, error: userLikeError } = await supabaseAdmin
+              .from("menu_likes")
+              .select("menu_id, user_id")
+              .eq("menu_id", menuId)
+              .eq("user_id", userId)
+              .maybeSingle();
+
+            if (!userLikeError && userLike) {
+              isLiked = true;
+            }
           }
         } catch (err) {
           // menu_likes 테이블이 없을 수 있으므로 에러 무시
@@ -188,6 +212,7 @@ export async function GET(
           roleLabel,
           ingredients,
           likes,
+          isLiked,
           sourceType: menu.source_type as SourceType,
         };
       })
@@ -236,7 +261,24 @@ export async function POST(
       );
     }
 
-    // 1) MENUS에 메뉴 추가
+    // 1) MENUS에 메뉴 추가 (UTC+9 기준으로 created_at 설정)
+    // 현재 시간을 한국 시간(UTC+9) 기준으로 저장
+    // 서버가 UTC 시간대에 있다고 가정:
+    // - 서버 시간이 UTC 2024-12-06 01:00:00이면
+    // - 한국 시간은 2024-12-06 10:00:00 (UTC+9)
+    // - 우리는 한국 시간 기준으로 저장하고 싶으므로, 서버 시간을 그대로 사용
+    //   (서버가 UTC로 저장하면, 한국 시간에서 9시간을 뺀 값이 저장됨)
+    // 하지만 우리는 한국 시간 기준으로 저장하고 싶으므로:
+    // - 한국 시간을 UTC로 변환: 한국 시간 - 9시간 = UTC
+    // - 현재 서버 시간을 한국 시간으로 해석하고, 이를 UTC로 변환
+    const now = new Date(); // 서버의 현재 시간
+    // 서버 시간을 한국 시간으로 해석 (서버 시간 + 9시간 = 한국 시간)
+    // 그런 다음 한국 시간을 UTC로 변환 (한국 시간 - 9시간 = UTC)
+    // 결과적으로 서버 시간 그대로가 됨 (now + 9 - 9 = now)
+    // 하지만 우리는 한국 시간 기준으로 저장하고 싶으므로, 서버 시간에 9시간을 더한 값을 UTC로 저장
+    const koreaTime = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const createdAtUTC = koreaTime.toISOString();
+
     const { data: menuInsert, error: menuError } = await supabaseAdmin
       .from("menus")
       .insert({
@@ -245,6 +287,7 @@ export async function POST(
         menu_name: menuName,
         status,
         source_type: sourceType,
+        created_at: createdAtUTC, // UTC+9 기준 시간을 UTC로 변환하여 저장
       })
       .select("menu_id")
       .single();
@@ -515,6 +558,112 @@ export async function DELETE(
         error: "서버 에러가 발생했습니다.",
         details: err instanceof Error ? err.message : String(err)
       },
+      { status: 500 }
+    );
+  }
+}
+
+// 좋아요 추가/삭제 API
+export async function PUT(
+  req: Request,
+  context: { params: Promise<{ familyId: string }> }
+) {
+  try {
+    const { familyId: familyIdStr } = await context.params;
+    const familyId = Number(familyIdStr);
+
+    if (Number.isNaN(familyId)) {
+      return NextResponse.json(
+        { error: "올바른 familyId가 아닙니다." },
+        { status: 400 }
+      );
+    }
+
+    const body = await req.json();
+    const { menuId, userId, isLiked } = body;
+
+    if (!menuId || !userId || typeof isLiked !== "boolean") {
+      return NextResponse.json(
+        { error: "menuId, userId, isLiked는 필수입니다." },
+        { status: 400 }
+      );
+    }
+
+    // 메뉴가 해당 가족에 속하는지 확인
+    const { data: menu, error: menuCheckError } = await supabaseAdmin
+      .from("menus")
+      .select("menu_id, family_id")
+      .eq("menu_id", menuId)
+      .eq("family_id", familyId)
+      .single();
+
+    if (menuCheckError || !menu) {
+      return NextResponse.json(
+        { error: "메뉴를 찾을 수 없거나 권한이 없습니다." },
+        { status: 404 }
+      );
+    }
+
+    if (isLiked) {
+      // 좋아요 추가 (UTC+9 기준으로 created_at 설정)
+      // 현재 시간을 한국 시간(UTC+9) 기준으로 저장
+      const now = new Date();
+      const koreaTime = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+      const createdAtUTC = koreaTime.toISOString();
+
+      const { error: insertError } = await supabaseAdmin
+        .from("menu_likes")
+        .insert({
+          menu_id: menuId,
+          user_id: userId,
+          created_at: createdAtUTC, // UTC+9 기준 시간을 UTC로 변환하여 저장
+        });
+
+      if (insertError) {
+        // 이미 좋아요가 있는 경우 무시 (중복 삽입 방지)
+        if (insertError.code === "23505") {
+          // UNIQUE 제약조건 위반 (이미 좋아요가 있음)
+          return NextResponse.json(
+            { message: "이미 좋아요를 눌렀습니다.", isLiked: true },
+            { status: 200 }
+          );
+        }
+        console.error("menu_likes insert error:", insertError);
+        return NextResponse.json(
+          { error: "좋아요 추가 중 오류가 발생했습니다." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json(
+        { message: "좋아요가 추가되었습니다.", isLiked: true },
+        { status: 200 }
+      );
+    } else {
+      // 좋아요 삭제
+      const { error: deleteError } = await supabaseAdmin
+        .from("menu_likes")
+        .delete()
+        .eq("menu_id", menuId)
+        .eq("user_id", userId);
+
+      if (deleteError) {
+        console.error("menu_likes delete error:", deleteError);
+        return NextResponse.json(
+          { error: "좋아요 삭제 중 오류가 발생했습니다." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json(
+        { message: "좋아요가 취소되었습니다.", isLiked: false },
+        { status: 200 }
+      );
+    }
+  } catch (err) {
+    console.error("PUT /family/[familyId]/menus error:", err);
+    return NextResponse.json(
+      { error: "서버 에러가 발생했습니다." },
       { status: 500 }
     );
   }
