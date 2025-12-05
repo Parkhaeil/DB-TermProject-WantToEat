@@ -73,6 +73,7 @@ type MenuCardProps = MenuItem & {
   onDelete: () => void;
   onCopy: () => void;
   onDecideToday: () => void;
+  userRole?: "PARENT" | "CHILD" | "FOLLOWER";
 };
 
 function MenuCard({
@@ -86,6 +87,7 @@ function MenuCard({
   onDelete,
   onCopy,
   onDecideToday,
+  userRole,
 }: MenuCardProps) {
   const stockedIngredients = ingredients.filter(
     (ing) => ing.storage_type !== "NEED"
@@ -138,13 +140,15 @@ function MenuCard({
 
           {isMenuOpen && (
             <div className="absolute right-0 mt-1 w-40 bg-white border border-[#E7E1DA] rounded-xl shadow-lg text-[12px] text-[#32241B] z-20 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => handleClickMenuAction("today")}
-                className="w-full text-left px-3 py-2 hover:bg-[#FFF6E9]"
-              >
-                오늘의 메뉴로 결정
-              </button>
+              {userRole === "PARENT" && (
+                <button
+                  type="button"
+                  onClick={() => handleClickMenuAction("today")}
+                  className="w-full text-left px-3 py-2 hover:bg-[#FFF6E9]"
+                >
+                  오늘의 메뉴로 결정
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleClickMenuAction("copy")}
@@ -231,7 +235,11 @@ function MenuCard({
    왼쪽 섹션 본문
    =========================== */
 
-export default function FamilyLeftSection() {
+type FamilyLeftSectionProps = {
+  userRole?: "PARENT" | "CHILD" | "FOLLOWER";
+};
+
+export default function FamilyLeftSection({ userRole }: FamilyLeftSectionProps = {}) {
   const params = useParams();
   const familyIdParam = params?.familyId;
 
@@ -671,6 +679,7 @@ export default function FamilyLeftSection() {
                   onDelete={() => handleDeleteMenu(m.menu_id)}
                   onCopy={() => handleCopyMenu(m)}
                   onDecideToday={() => handleDecideToday(m)}
+                  userRole={userRole}
                 />
               ))
             )}
@@ -690,6 +699,7 @@ export default function FamilyLeftSection() {
                   onDelete={() => handleDeleteMenu(m.menu_id)}
                   onCopy={() => handleCopyMenu(m)}
                   onDecideToday={() => handleDecideToday(m)}
+                  userRole={userRole}
                 />
               ))
             )}
