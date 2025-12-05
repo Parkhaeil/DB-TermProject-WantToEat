@@ -78,6 +78,7 @@ type MenuCardProps = MenuItem & {
   onToggleLike: (menuId: number, currentIsLiked: boolean) => Promise<void>;
   familyId: number;
   userId: number;
+  userRole?: "PARENT" | "CHILD" | "FOLLOWER";
 };
 
 function MenuCard({
@@ -95,6 +96,7 @@ function MenuCard({
   onToggleLike,
   familyId,
   userId,
+  userRole,
 }: MenuCardProps) {
   const stockedIngredients = ingredients.filter(
     (ing) => ing.storage_type !== "NEED"
@@ -873,6 +875,7 @@ export default function FamilyLeftSection({ userRole }: FamilyLeftSectionProps =
                     onToggleLike={handleToggleLike}
                     familyId={Number(familyIdParam)}
                     userId={currentUser?.userId || 0}
+                    userRole={userRole}
             />
                 );
               })
@@ -898,6 +901,7 @@ export default function FamilyLeftSection({ userRole }: FamilyLeftSectionProps =
                     onToggleLike={handleToggleLike}
                     familyId={Number(familyIdParam)}
                     userId={currentUser?.userId || 0}
+                    userRole={userRole}
             />
                 );
               })
