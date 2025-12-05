@@ -184,7 +184,7 @@ type SimpleStorage = "FREEZER" | "FRIDGE" | "ROOM";
 
 const storageMeta: Record<
   SimpleStorage,
-  { label: string; icon: JSX.Element; colorClass: string }
+  { label: string; icon: React.ReactElement; colorClass: string }
 > = {
   FREEZER: {
     label: "냉동실",
@@ -208,6 +208,10 @@ export default function FamilyRightSection() {
   const familyIdParam = params?.familyId;
 
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+  
+  // 오늘의 메뉴 상태
+  const [todayMenu, setTodayMenu] = useState<TodayMenu | null>(null);
+  const [isLoadingTodayMenu, setIsLoadingTodayMenu] = useState(false);
 
   // 냉장고 아이템 (서버 + 클라이언트 추가)
   const [freezerItems, setFreezerItems] = useState<string[]>([]);
@@ -260,9 +264,59 @@ export default function FamilyRightSection() {
     }
   };
 
-  // 초기 냉장고 데이터 로딩
+  // 오늘의 메뉴 불러오기
+  const reloadTodayMenu = async () => {
+    if (!familyIdParam) return;
+    if (typeof window === "undefined") return;
+
+    try {
+      setIsLoadingTodayMenu(true);
+      const familyIdNum = Number(familyIdParam);
+
+      const res = await fetch(
+        `/api/todays_menu?familyId=${familyIdNum}`,
+        {
+          cache: "no-store",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("오늘의 메뉴 조회 에러:", data);
+        setTodayMenu(null);
+        return;
+      }
+
+      // 데이터가 없으면 null로 설정
+      if (!data.data) {
+        setTodayMenu(null);
+        return;
+      }
+
+      // API 응답 데이터를 TodayMenu 타입으로 변환
+      const apiData = data.data;
+      setTodayMenu({
+        menu_id: apiData.menu_id,
+        menu_name: apiData.menu_name,
+        status: apiData.status || "POSSIBLE",
+        author: apiData.creator_nickname || "알 수 없음",
+        roleLabel: apiData.role_label || "팔로워",
+        ingredients: apiData.ingredients || [],
+        likes: apiData.likes_count || 0,
+      });
+    } catch (err) {
+      console.error("오늘의 메뉴 정보를 불러오는 중 오류:", err);
+      setTodayMenu(null);
+    } finally {
+      setIsLoadingTodayMenu(false);
+    }
+  };
+
+  // 초기 냉장고 데이터 로딩 + 오늘의 메뉴 로딩
   useEffect(() => {
     reloadFridge();
+    reloadTodayMenu();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [familyIdParam]);
 
@@ -403,7 +457,17 @@ export default function FamilyRightSection() {
           <div className="text-[14px] font-bold">오늘의 메뉴</div>
         </div>
 
-        <TodayMenuCard {...todayMenuDummy} />
+        {isLoadingTodayMenu ? (
+          <div className="text-[12px] text-[#847062] text-center py-4">
+            불러오는 중...
+          </div>
+        ) : todayMenu ? (
+          <TodayMenuCard {...todayMenu} />
+        ) : (
+          <div className="text-[12px] text-[#847062] text-center py-4">
+            오늘의 메뉴가 선택되지 않았습니다.
+          </div>
+        )}
       </div>
 
       {/* 냉장고 박스 + 재료 추가 팝오버 */}
