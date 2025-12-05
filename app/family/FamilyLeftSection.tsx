@@ -445,10 +445,64 @@ export default function FamilyLeftSection({ userRole }: FamilyLeftSectionProps =
   );
   const wishMenus = sortMenus(menus.filter((m) => m.status === "WISH"));
 
-  // 오늘의 메뉴로 결정 (지금은 콘솔 + alert만, 나중에 오른쪽 섹션이랑 연동 가능)
-  const handleDecideToday = (menu: MenuItem) => {
-    console.log("[오늘의 메뉴로 결정]", menu);
-    alert(`‘${menu.menu_name}’을(를) 오늘의 메뉴로 결정했어요! (우측 패널 연동 예정)`);
+  // 오늘의 메뉴로 결정
+  const handleDecideToday = async (menu: MenuItem) => {
+    if (!familyIdParam) {
+      alert("가족 ID를 찾을 수 없습니다.");
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+
+    try {
+      const storedUser = localStorage.getItem("currentUser");
+      const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+
+      if (!isLoggedIn || !storedUser) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
+
+      const currentUser = JSON.parse(storedUser);
+      const userId = currentUser.userId;
+      const familyIdNum = Number(familyIdParam);
+
+      if (Number.isNaN(familyIdNum)) {
+        alert("유효하지 않은 가족 ID입니다.");
+        return;
+      }
+
+      const res = await fetch("/api/todays_menu", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          familyId: familyIdNum,
+          menuId: menu.menu_id,
+          userId: userId,
+          // targetDate는 선택사항, 없으면 오늘 날짜 사용
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("오늘의 메뉴 등록 실패:", data);
+        alert(data.error || "오늘의 메뉴 등록에 실패했습니다.");
+        return;
+      }
+
+      alert(`'${menu.menu_name}'을(를) 오늘의 메뉴로 결정했어요!`);
+      
+      // 페이지 새로고침하여 오른쪽 섹션의 오늘의 메뉴도 업데이트
+      if (typeof window !== "undefined") {
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error("오늘의 메뉴 등록 중 오류:", err);
+      alert("서버 연결 실패");
+    }
   };
 
   // 메뉴 삭제

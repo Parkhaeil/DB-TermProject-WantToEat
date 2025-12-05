@@ -81,7 +81,6 @@ export async function GET(req: Request) {
       creator_nickname: firstRow.creator_nickname,
       creator_role: firstRow.creator_role,
       role_label: roleLabel,
-      likes_count: firstRow.likes_count || 0,
       ingredients: ingredients,
     };
 
@@ -113,8 +112,54 @@ export async function POST(req: Request) {
 
     const date = targetDate || new Date().toISOString().split("T")[0];
 
+    // 부모 권한 체크
+    const { data: parentData, error: parentError } = await supabaseAdmin
+      .from("family_members")
+      .select("role")
+      .eq("family_id", familyId)
+      .eq("user_id", userId)
+      .maybeSingle();
 
-    return NextResponse.json({ message: "POST 구현 필요" });
+    if (parentError) {
+      console.error("부모 권한 체크 에러:", parentError);
+      return NextResponse.json(
+        { error: "부모 권한 체크 실패" },
+        { status: 403 }
+      );
+    }
+
+    if (parentData?.role !== "PARENT") {
+      return NextResponse.json(
+        { error: "부모가 아님" },
+        { status: 403 }
+      );
+    }
+
+    // 오늘의 메뉴 등록
+    const { error: todayMenuError } = await supabaseAdmin
+      .from("today_menus")
+      .insert({
+        family_id: familyId,
+        menu_id: menuId,
+        target_date: date,
+        selected_by: userId,
+      });
+
+    if (todayMenuError) {
+      console.error("오늘의 메뉴 등록 에러:", todayMenuError);
+      return NextResponse.json(
+        { error: "오늘의 메뉴 등록 실패" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      { 
+        success: true,
+        message: "오늘의 메뉴가 성공적으로 등록되었습니다.",
+      },
+      { status: 201 }
+    );
   } catch (err) {
     console.error("POST /api/todaysmenu error:", err);
     return NextResponse.json(
@@ -148,14 +193,24 @@ export async function DELETE(req: Request) {
 
     const targetDate = targetDateParam || new Date().toISOString().split("T")[0];
 
-    // TODO: today_menus 테이블에서 DELETE
-    // const { error } = await supabaseAdmin
-    //   .from("today_menus")
-    //   .delete()
-    //   .eq("family_id", familyId)
-    //   .eq("target_date", targetDate);
+    const { error: todayMenuError } = await supabaseAdmin
+      .from("today_menus")
+      .delete()
+      .eq("family_id", familyId)
+      .eq("target_date", targetDate);
 
-    return NextResponse.json({ message: "DELETE 구현 필요" });
+    if (todayMenuError) {
+      console.error("오늘의 메뉴 삭제 에러:", todayMenuError);
+      return NextResponse.json(
+        { error: "오늘의 메뉴 삭제 실패" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      { success: true, message: "오늘의 메뉴가 성공적으로 삭제되었습니다." },
+      { status: 200 }
+    );
   } catch (err) {
     console.error("DELETE /api/todaysmenu error:", err);
     return NextResponse.json(
