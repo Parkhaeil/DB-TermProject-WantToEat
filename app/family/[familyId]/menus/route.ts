@@ -388,45 +388,30 @@ export async function DELETE(
         console.log("오늘의 메뉴로 설정된 메뉴 발견, 처리 시작...");
         console.log("찾은 레코드 수:", todayMenus.length);
         
-        // menu_id를 NULL로 설정 시도 (미정 상태로 변경)
-        const { error: todayMenuUpdateError } = await supabaseAdmin
+        // 스키마상 menu_id는 NOT NULL이므로 레코드를 삭제해야 함
+        // 레코드 삭제 = 오늘의 메뉴가 미정 상태가 됨 (UNIQUE 제약조건 때문에 같은 날짜에 하나만 존재)
+        const { error: todayMenuDeleteError } = await supabaseAdmin
           .from("today_menus")
-          .update({ menu_id: null })
+          .delete()
           .eq("menu_id", menuId)
           .eq("family_id", familyId);
 
-        if (todayMenuUpdateError) {
-          console.error("today_menus menu_id NULL 설정 실패:", todayMenuUpdateError);
-          console.error("에러 코드:", todayMenuUpdateError.code);
-          console.error("에러 메시지:", todayMenuUpdateError.message);
+        if (todayMenuDeleteError) {
+          console.error("today_menus 삭제 실패:", todayMenuDeleteError);
+          console.error("삭제 에러 코드:", todayMenuDeleteError.code);
+          console.error("삭제 에러 메시지:", todayMenuDeleteError.message);
           
-          // menu_id를 NULL로 설정할 수 없으면 레코드를 삭제
-          console.log("레코드 삭제 시도...");
-          const { error: todayMenuDeleteError } = await supabaseAdmin
-            .from("today_menus")
-            .delete()
-            .eq("menu_id", menuId)
-            .eq("family_id", familyId);
-
-          if (todayMenuDeleteError) {
-            console.error("today_menus 삭제 실패:", todayMenuDeleteError);
-            console.error("삭제 에러 코드:", todayMenuDeleteError.code);
-            console.error("삭제 에러 메시지:", todayMenuDeleteError.message);
-            
-            // today_menus 삭제 실패 시 에러 반환
-            return NextResponse.json(
-              { 
-                error: "오늘의 메뉴에서 메뉴를 제거하는 중 오류가 발생했습니다.",
-                details: todayMenuDeleteError.message,
-                code: todayMenuDeleteError.code
-              },
-              { status: 500 }
-            );
-          } else {
-            console.log("today_menus 레코드 삭제 성공 (메뉴 삭제 후 미정 상태로 처리됨)");
-          }
+          // today_menus 삭제 실패 시 에러 반환
+          return NextResponse.json(
+            { 
+              error: "오늘의 메뉴에서 메뉴를 제거하는 중 오류가 발생했습니다.",
+              details: todayMenuDeleteError.message,
+              code: todayMenuDeleteError.code
+            },
+            { status: 500 }
+          );
         } else {
-          console.log("today_menus menu_id를 NULL로 설정 성공 (미정 상태로 변경)");
+          console.log("today_menus 레코드 삭제 성공 (오늘의 메뉴가 미정 상태로 변경됨)");
         }
       }
     } catch (err) {
