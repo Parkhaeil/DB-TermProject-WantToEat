@@ -397,7 +397,9 @@ export default function FamilyRightSection({ userRole }: FamilyRightSectionProps
 
     try {
       const familyIdNum = Number(familyIdParam);
-      const targetDate = new Date().toISOString().split("T")[0];
+      // 타임존 문제 방지: 로컬 날짜만 사용
+      const now = new Date();
+      const targetDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
       const res = await fetch(
         `/api/todays_menu?familyId=${familyIdNum}&targetDate=${targetDate}`,

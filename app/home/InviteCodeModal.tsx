@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 
 interface InviteCodeModalProps {
@@ -12,6 +13,7 @@ const InviteCodeModal: React.FC<InviteCodeModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const router = useRouter();
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,13 +70,21 @@ const InviteCodeModal: React.FC<InviteCodeModalProps> = ({
       // 성공
       setSuccessMessage("가족에 성공적으로 참여했습니다!");
 
-      // 가족 목록 새로고침을 위해 전체 페이지 리로드
-      setTimeout(() => {
-        onClose();
-        if (typeof window !== "undefined") {
-          window.location.reload();
-        }
-      }, 800);
+      // 가족 페이지로 이동
+      if (data.family?.familyId) {
+        setTimeout(() => {
+          onClose();
+          router.push(`/family/${data.family.familyId}`);
+        }, 800);
+      } else {
+        // familyId가 없으면 페이지 리로드
+        setTimeout(() => {
+          onClose();
+          if (typeof window !== "undefined") {
+            window.location.reload();
+          }
+        }, 800);
+      }
     } catch (err) {
       console.error("가족 참여 에러:", err);
       setError(err instanceof Error ? err.message : "가족 참여에 실패했습니다.");
