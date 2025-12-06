@@ -155,10 +155,16 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
           return;
         }
 
-        // API 응답에서 재료 데이터 설정
-        setFreezerIngredients(json.freezer || []);
-        setFridgeIngredients(json.fridge || []);
-        setRoomIngredients(json.room || []);
+        // API 응답에서 재료 데이터 설정 (객체 배열에서 name만 추출)
+        setFreezerIngredients(
+          (json.freezer || []).map((item: { id: number; name: string }) => item.name)
+        );
+        setFridgeIngredients(
+          (json.fridge || []).map((item: { id: number; name: string }) => item.name)
+        );
+        setRoomIngredients(
+          (json.room || []).map((item: { id: number; name: string }) => item.name)
+        );
       } catch (err) {
         console.error("냉장고 재료 조회 요청 에러:", err);
         // 에러 발생 시 빈 배열로 설정
@@ -408,9 +414,9 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
                               </div>
                             ) : (
                             <div className="flex flex-wrap gap-1">
-                              {list.map((name) => (
+                              {list.map((name, index) => (
                                 <IngredientChip
-                                  key={name}
+                                  key={`${storage}-${name}-${index}`}
                                   name={name}
                                   selected={selected.includes(name)}
                                   onToggle={() =>

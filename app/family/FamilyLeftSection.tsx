@@ -89,6 +89,7 @@ function MenuCard({
   ingredients,
   likes,
   isLiked: initialIsLiked,
+  sourceType,
   onEdit,
   onDelete,
   onCopy,
@@ -173,9 +174,22 @@ function MenuCard({
     <div className="w-full max-w-115 bg-[#FFFFFF] border border-[#E7E1DA] rounded-2xl px-4 py-4 flex flex-col gap-3">
       {/* 상단: 메뉴 이름 + 점3개 */}
       <div className="flex items-start justify-between relative">
-        <div className="flex flex-col gap-1">
-          <div className="text-[14px] font-bold text-[#32241B]">
-            {menu_name}
+        <div className="flex flex-col gap-1 w-full">
+          <div className="flex items-center justify-between w-full">
+            <div className="text-[14px] font-bold text-[#32241B]">
+              {menu_name}
+            </div>
+            {sourceType && (
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                  sourceType === "HOME"
+                    ? "bg-[#FFF2D9] text-[#E0A85A] border border-[#F5D4A8]"
+                    : "bg-[#E8F4F8] text-[#4DA3FF] border border-[#B8D9F0]"
+                }`}
+              >
+                {sourceType === "HOME" ? "집밥" : "외식"}
+              </span>
+            )}
           </div>
           <div className="text-[12px] text-[#A28B78]">
             {author} · {roleLabel}
@@ -328,6 +342,11 @@ export default function FamilyLeftSection({
     member_count: number;
   }[]>([]);
   const [isLoadingFamilies, setIsLoadingFamilies] = useState(false);
+
+  // 현재 가족 정보
+  const currentFamily = families.find(
+    (f) => f.family_id === Number(familyIdParam)
+  );
 
   // 현재 사용자 정보 가져오기
   const getCurrentUser = () => {
@@ -897,7 +916,7 @@ export default function FamilyLeftSection({
       <div className="grid grid-cols-2 w-230">
         <div className="flex gap-2 items-center">
           <div className="text-[24px]">🍳</div>
-          <div className="text-[16px] font-semibold">가능해요</div>
+          <div className="text-[16px] font-semibold">얘들아, 이거 만들어줄게~</div>
           <div className="text-[12px] text-[#7B1E3D] bg-[#F9DDE6] rounded-2xl px-3 py-0.5">
             {possibleMenus.length}
           </div>
@@ -905,7 +924,7 @@ export default function FamilyLeftSection({
 
         <div className="flex gap-2 items-center">
           <div className="text-[24px]">🙏</div>
-          <div className="text-[16px] font-semibold">먹고싶어요</div>
+          <div className="text-[16px] font-semibold">엄마 아빠, 이거 먹고 싶어요!</div>
           <div className="text-[12px] text-[#7B1E3D] bg-[#F9DDE6] rounded-2xl px-3 py-0.5">
             {wishMenus.length}
           </div>
@@ -988,7 +1007,11 @@ export default function FamilyLeftSection({
       <AddMenuModal
         isOpen={isAddMenuOpen}
         onClose={handleCloseModal}
-        familyName={selectedFamily?.family_name || "이유민네 메뉴판"}
+        familyName={
+          selectedFamily?.family_name || 
+          currentFamily?.family_name || 
+          "가족 메뉴판"
+        }
         familyId={selectedFamily?.family_id || (familyIdParam ? Number(familyIdParam) : undefined)}
         userId={getCurrentUser()?.userId}
         editingMenu={editingMenu}

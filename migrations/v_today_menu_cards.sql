@@ -6,6 +6,7 @@ SELECT
     tm.target_date,
 
     m.menu_name,
+    m.source_type,
     m.created_by,
 
     u.nickname           AS creator_nickname,
