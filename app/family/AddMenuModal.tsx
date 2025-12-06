@@ -25,6 +25,13 @@ type EditingMenu = {
   menu_name: string;
   status: MenuStatus;
   ingredients: MenuIngredient[];
+  sourceType?: SourceType;
+  // MenuItem의 나머지 필드들 (optional, 사용하지 않지만 타입 호환성을 위해)
+  author?: string;
+  roleLabel?: string;
+  likes?: number;
+  isLiked?: boolean;
+  createdBy?: number;
 };
 
 interface AddMenuModalProps {
@@ -204,8 +211,7 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
 
     } else if (editingMenu) {
       setMenuName(editingMenu.menu_name);
-
-
+      setSourceType(editingMenu.sourceType || "HOME");
       
       // 재료 분류
       const freezer: string[] = [];

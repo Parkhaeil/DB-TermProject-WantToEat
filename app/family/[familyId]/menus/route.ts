@@ -697,3 +697,209 @@ export async function PUT(
     );
   }
 }
+
+// 메뉴 수정 API
+type UpdateMenuBody = {
+  menuId: number;
+  menuName: string;
+  sourceType: SourceType;
+  selectedIngredients?: SelectedIngredient[];
+  toBuy?: string[];
+  userId: number;
+};
+
+export async function PATCH(
+  req: Request,
+  context: { params: Promise<{ familyId: string }> }
+) {
+  try {
+    const { familyId: familyIdStr } = await context.params;
+    const familyId = Number(familyIdStr);
+
+    if (Number.isNaN(familyId)) {
+      return NextResponse.json(
+        { error: "올바른 familyId가 아닙니다." },
+        { status: 400 }
+      );
+    }
+
+    const body = (await req.json()) as UpdateMenuBody;
+    const {
+      menuId,
+      menuName,
+      sourceType,
+      selectedIngredients = [],
+      toBuy = [],
+      userId,
+    } = body;
+
+    if (!menuId || !userId || !menuName || !sourceType) {
+      return NextResponse.json(
+        { error: "menuId, userId, menuName, sourceType는 필수입니다." },
+        { status: 400 }
+      );
+    }
+
+    // 메뉴가 해당 가족에 속하고, 수정 권한이 있는지 확인 (작성자만 수정 가능)
+    const { data: menu, error: menuCheckError } = await supabaseAdmin
+      .from("menus")
+      .select("menu_id, family_id, created_by")
+      .eq("menu_id", menuId)
+      .eq("family_id", familyId)
+      .single();
+
+    if (menuCheckError || !menu) {
+      return NextResponse.json(
+        { error: "메뉴를 찾을 수 없거나 권한이 없습니다." },
+        { status: 404 }
+      );
+    }
+
+    // 작성자만 수정 가능
+    if (menu.created_by !== userId) {
+      return NextResponse.json(
+        { error: "메뉴를 수정할 권한이 없습니다." },
+        { status: 403 }
+      );
+    }
+
+    // updated_at을 한국 시간(KST, UTC+9) 기준으로 설정
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
+    const updatedAtKst = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}+09:00`;
+
+    // 1) menus 테이블에서 메뉴 정보 업데이트 (created_at은 유지, updated_at만 업데이트)
+    const { error: menuUpdateError } = await supabaseAdmin
+      .from("menus")
+      .update({
+        menu_name: menuName,
+        source_type: sourceType,
+        updated_at: updatedAtKst, // 한국 시간으로 명시해서 업데이트
+      })
+      .eq("menu_id", menuId)
+      .eq("family_id", familyId);
+
+    if (menuUpdateError) {
+      console.error("menus update error:", menuUpdateError);
+      return NextResponse.json(
+        { error: "메뉴 수정에 실패했습니다." },
+        { status: 500 }
+      );
+    }
+
+    // 2) 기존 menu_ingredients 삭제
+    const { error: ingredientsDeleteError } = await supabaseAdmin
+      .from("menu_ingredients")
+      .delete()
+      .eq("menu_id", menuId);
+
+    if (ingredientsDeleteError) {
+      console.error("menu_ingredients delete error:", ingredientsDeleteError);
+      return NextResponse.json(
+        { error: "기존 재료 삭제 중 오류가 발생했습니다." },
+        { status: 500 }
+      );
+    }
+
+    // 3) 재료 통합 및 재추가 (POST와 동일한 로직)
+    type FullIngredient = {
+      name: string;
+      storage_type: "FREEZER" | "FRIDGE" | "ROOM" | "NEED";
+    };
+
+    const fullIngredients: FullIngredient[] = [
+      ...selectedIngredients.map((ing) => ({
+        name: ing.name,
+        storage_type: ing.storage,
+      })),
+      ...toBuy.map((name) => ({
+        name,
+        storage_type: "NEED" as const,
+      })),
+    ];
+
+    // 4) 각 재료 처리
+    for (const ing of fullIngredients) {
+      // 4-1) fridge_ingredients에 이미 있는지 확인
+      const { data: existing, error: existError } = await supabaseAdmin
+        .from("fridge_ingredients")
+        .select("ingredient_id")
+        .eq("family_id", familyId)
+        .eq("ingredient_name", ing.name)
+        .eq("storage_type", ing.storage_type)
+        .maybeSingle();
+
+      if (existError) {
+        console.error("fridge_ingredients select error:", existError);
+        return NextResponse.json(
+          { error: "재료 조회 중 오류가 발생했습니다." },
+          { status: 500 }
+        );
+      }
+
+      let ingredientId: number;
+
+      if (existing) {
+        ingredientId = existing.ingredient_id as number;
+      } else {
+        // 4-2) 없으면 새로 INSERT
+        const { data: insertedIng, error: insertIngError } = await supabaseAdmin
+          .from("fridge_ingredients")
+          .insert({
+            family_id: familyId,
+            ingredient_name: ing.name,
+            storage_type: ing.storage_type,
+            created_by: userId,
+          })
+          .select("ingredient_id")
+          .single();
+
+        if (insertIngError || !insertedIng) {
+          console.error("fridge_ingredients insert error:", insertIngError);
+          return NextResponse.json(
+            { error: "재료 추가 중 오류가 발생했습니다." },
+            { status: 500 }
+          );
+        }
+
+        ingredientId = insertedIng.ingredient_id as number;
+      }
+
+      // 4-3) menu_ingredients 연결
+      const { error: linkErr } = await supabaseAdmin
+        .from("menu_ingredients")
+        .insert({
+          menu_id: menuId,
+          ingredient_id: ingredientId,
+        });
+
+      if (linkErr) {
+        console.error("menu_ingredients insert error:", linkErr);
+        return NextResponse.json(
+          { error: "메뉴-재료 연결 중 오류가 발생했습니다." },
+          { status: 500 }
+        );
+      }
+    }
+
+    return NextResponse.json(
+      {
+        menuId,
+        message: "메뉴가 성공적으로 수정되었습니다.",
+      },
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error("PATCH /family/[familyId]/menus error:", err);
+    return NextResponse.json(
+      { error: "서버 에러가 발생했습니다." },
+      { status: 500 }
+    );
+  }
+}
