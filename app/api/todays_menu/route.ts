@@ -87,6 +87,7 @@ export async function GET(req: Request) {
       family_id: firstRow.family_id,
       menu_id: firstRow.menu_id,
       menu_name: firstRow.menu_name,
+      source_type: firstRow.source_type || "HOME",
       status: firstRow.status || "POSSIBLE",
       target_date: firstRow.target_date,
       creator_nickname: firstRow.creator_nickname,

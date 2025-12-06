@@ -34,6 +34,7 @@ type TodayMenu = {
   author: string;
   roleLabel: string;
   ingredients: MenuIngredient[];
+  sourceType?: "HOME" | "EAT_OUT";
 };
 
 type TodayMenuCardProps = TodayMenu & {
@@ -99,6 +100,7 @@ function TodayMenuCard({
   author,
   roleLabel,
   ingredients,
+  sourceType,
   onDeleteTodayMenu,
   onCopyToFamily,
   userRole,
@@ -116,9 +118,22 @@ function TodayMenuCard({
     <div className="w-full bg-[#FFFFFF] border border-[#E7E1DA] rounded-2xl px-4 py-4 flex flex-col gap-3">
       {/* 상단 */}
       <div className="flex items-start justify-between relative">
-        <div className="flex flex-col gap-1">
-          <div className="text-[14px] font-bold text-[#32241B]">
-            {menu_name}
+        <div className="flex flex-col gap-1 w-full">
+          <div className="flex items-center justify-between w-full">
+            <div className="text-[14px] font-bold text-[#32241B]">
+              {menu_name}
+            </div>
+            {sourceType && (
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                  sourceType === "HOME"
+                    ? "bg-[#FFF2D9] text-[#E0A85A] border border-[#F5D4A8]"
+                    : "bg-[#E8F4F8] text-[#4DA3FF] border border-[#B8D9F0]"
+                }`}
+              >
+                {sourceType === "HOME" ? "집밥" : "외식"}
+              </span>
+            )}
           </div>
           <div className="text-[12px] text-[#A28B78]">
             {author} · {roleLabel}
@@ -340,6 +355,7 @@ export default function FamilyRightSection({
         author: apiData.creator_nickname || "알 수 없음",
         roleLabel: roleLabel,
         ingredients: apiData.ingredients || [],
+        sourceType: apiData.source_type === "EAT_OUT" ? "EAT_OUT" : "HOME",
       });
     } catch (err) {
       console.error("오늘의 메뉴 정보를 불러오는 중 오류:", err);
@@ -390,7 +406,7 @@ export default function FamilyRightSection({
         body: JSON.stringify({
           userId: userId,
           menuName: todayMenu.menu_name,
-          sourceType: "HOME", // 기본값
+          sourceType: todayMenu.sourceType || "HOME",
           status: "POSSIBLE",
           selectedIngredients: todayMenu.ingredients
             .filter((ing) => ing.storage_type !== "NEED")
