@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
 
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+
 type SourceType = "HOME" | "EAT_OUT";
 type MenuStatus = "POSSIBLE" | "WISH";
 
@@ -63,35 +66,25 @@ export async function GET(
       .select("menu_id, menu_name, status, source_type, created_by, created_at")
       .eq("family_id", familyId);
 
-    // 날짜 파라미터가 있으면 해당 날짜로 필터링 (UTC+9 기준)
+    // 날짜 파라미터가 있으면 해당 날짜로 필터링 (한국 시간 KST 기준)
     if (dateParam) {
       try {
-        const [year, month, day] = dateParam.split("-").map(Number);
-        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-          // UTC+9 (한국 시간) 기준으로 날짜 범위 설정
-          // 예: "2024-12-06"을 받으면 한국 시간 2024-12-06 00:00:00 ~ 23:59:59로 해석
-          // 한국 시간 2024-12-06 00:00:00 KST = UTC 2024-12-05 15:00:00
-          // 한국 시간 2024-12-06 23:59:59.999 KST = UTC 2024-12-06 14:59:59.999
-          
-          // 한국 시간(UTC+9) 기준 시작 시간 (00:00:00)을 UTC로 변환
-          // Date.UTC로 UTC 시간을 만들고, 한국 시간을 표현하려면 9시간을 빼야 함
-          const startDateUTC = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-          startDateUTC.setUTCHours(startDateUTC.getUTCHours() - 9);
-          
-          // 한국 시간(UTC+9) 기준 끝 시간 (23:59:59.999)을 UTC로 변환
-          const endDateUTC = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
-          endDateUTC.setUTCHours(endDateUTC.getUTCHours() - 9);
+        // 예: dateParam === "2024-12-06"
+        // 한국 시간 기준: 2024-12-06 00:00:00 ~ 23:59:59.999
+        // DB에 저장된 created_at이 "+09:00" 형식이므로 동일한 형식으로 비교
+        const startKstStr = `${dateParam}T00:00:00.000+09:00`;
+        const endKstStr = `${dateParam}T23:59:59.999+09:00`;
 
-          // created_at이 해당 날짜 범위 내에 있는 메뉴만 조회 (UTC 기준)
-          dateFilter = dateFilter
-            .gte("created_at", startDateUTC.toISOString())
-            .lte("created_at", endDateUTC.toISOString());
-        }
+        dateFilter = dateFilter
+          .gte("created_at", startKstStr)
+          .lte("created_at", endKstStr);
       } catch (err) {
         console.error("날짜 파라미터 파싱 에러:", err);
         // 날짜 파싱 실패 시 날짜 필터 없이 진행
       }
     }
+
+    
 
     // 1) 메뉴 목록 조회
     const { data: menus, error: menusError } = await dateFilter
@@ -300,23 +293,18 @@ export async function POST(
       );
     }
 
-    // 1) MENUS에 메뉴 추가 (UTC+9 기준으로 created_at 설정)
-    // 현재 시간을 한국 시간(UTC+9) 기준으로 저장
-    // 서버가 UTC 시간대에 있다고 가정:
-    // - 서버 시간이 UTC 2024-12-06 01:00:00이면
-    // - 한국 시간은 2024-12-06 10:00:00 (UTC+9)
-    // - 우리는 한국 시간 기준으로 저장하고 싶으므로, 서버 시간을 그대로 사용
-    //   (서버가 UTC로 저장하면, 한국 시간에서 9시간을 뺀 값이 저장됨)
-    // 하지만 우리는 한국 시간 기준으로 저장하고 싶으므로:
-    // - 한국 시간을 UTC로 변환: 한국 시간 - 9시간 = UTC
-    // - 현재 서버 시간을 한국 시간으로 해석하고, 이를 UTC로 변환
-    const now = new Date(); // 서버의 현재 시간
-    // 서버 시간을 한국 시간으로 해석 (서버 시간 + 9시간 = 한국 시간)
-    // 그런 다음 한국 시간을 UTC로 변환 (한국 시간 - 9시간 = UTC)
-    // 결과적으로 서버 시간 그대로가 됨 (now + 9 - 9 = now)
-    // 하지만 우리는 한국 시간 기준으로 저장하고 싶으므로, 서버 시간에 9시간을 더한 값을 UTC로 저장
-    const koreaTime = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-    const createdAtUTC = koreaTime.toISOString();
+    // 1) MENUS에 메뉴 추가 (created_at을 한국시간 KST 기준으로 저장)
+    // 현재 시간을 로컬 시간대 기준으로 가져옴 (서버가 한국에 있으면 한국 시간)
+    const now = new Date();
+    // 로컬 시간대의 현재 시간을 한국 시간(KST, UTC+9) 형식의 문자열로 변환
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
+    const createdAtKst = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}+09:00`;
 
     const { data: menuInsert, error: menuError } = await supabaseAdmin
       .from("menus")
@@ -326,10 +314,11 @@ export async function POST(
         menu_name: menuName,
         status,
         source_type: sourceType,
-        created_at: createdAtUTC, // UTC+9 기준 시간을 UTC로 변환하여 저장
+        created_at: createdAtKst, // 🔥 한국 시간으로 명시해서 넣기
       })
       .select("menu_id")
       .single();
+
 
     if (menuError || !menuInsert) {
       console.error("menus insert error:", menuError);

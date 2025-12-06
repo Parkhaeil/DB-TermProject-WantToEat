@@ -34,9 +34,8 @@ interface AddMenuModalProps {
   familyId?: number; // 가족 ID 추가
   userId?: number; // 사용자 ID 추가
   editingMenu?: EditingMenu | null;
-  simpleMode?: boolean; // 간소화 모드: 메뉴 이름과 집밥/외식만
-  sourceMenuName?: string; // 복사할 메뉴 이름 (간소화 모드용)
-  sourceMenuType?: SourceType; // 복사할 메뉴의 집밥/외식 정보 (간소화 모드용)
+  sourceMenuName?: string; // 복사할 메뉴 이름 (다른 가족 메뉴 복사 시 사용)
+  sourceMenuType?: SourceType; // 복사할 메뉴의 집밥/외식 정보
   onSubmit?: (data: {
     menuName: string;
     sourceType: SourceType;
@@ -75,6 +74,8 @@ const storageMeta: Record<
   },
 };
 
+
+
 // 상태 아이콘/라벨 (더 이상 사용하지 않음 - 백엔드에서 역할에 따라 자동 설정)
 
 function IngredientChip({
@@ -109,7 +110,6 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
   familyId,
   userId,
   editingMenu = null,
-  simpleMode = false,
   sourceMenuName = "",
   sourceMenuType = "HOME",
   onSubmit,
@@ -136,8 +136,8 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
   // 냉장고 재료 데이터 가져오기
   useEffect(() => {
     const fetchIngredients = async () => {
-      if (!isOpen || !familyId || !userId || simpleMode) {
-        // 모달이 닫혀있거나 필수 정보가 없거나 간소화 모드면 재료를 가져오지 않음
+      if (!isOpen || !familyId || !userId) {
+        // 모달이 닫혀있거나 필수 정보가 없으면 재료를 가져오지 않음
         return;
       }
 
@@ -171,25 +171,35 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
     };
 
     fetchIngredients();
-  }, [isOpen, familyId, userId, simpleMode]);
+  }, [isOpen, familyId, userId]);
+
+
+  
 
   // 수정 모드일 때 기존 데이터로 폼 초기화
   React.useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      // 모달이 닫혔을 때 상태 초기화
+      setMenuName("");
+      setSourceType("HOME");
+      return;
+    }
     
-    // 간소화 모드를 먼저 체크 (editingMenu와 동시에 있을 수 없음)
-    if (simpleMode && !editingMenu) {
-      // 간소화 모드일 때: 메뉴 이름과 집밥/외식 정보 설정
-      console.log("간소화 모드 초기화:", { sourceMenuName, sourceMenuType });
-      setMenuName(sourceMenuName || "");
+    // sourceMenuName이 있으면 (다른 가족 메뉴 복사 시) 메뉴 이름과 집밥/외식 정보 설정
+    if (!editingMenu && sourceMenuName && sourceMenuName.trim().length > 0) {
+      setMenuName(sourceMenuName);
       setSourceType(sourceMenuType || "HOME");
       setSelectedFreezer([]);
       setSelectedFridge([]);
       setSelectedRoom([]);
       setToBuyList([]);
       setToBuyInput("");
+      
+
     } else if (editingMenu) {
       setMenuName(editingMenu.menu_name);
+
+
       
       // 재료 분류
       const freezer: string[] = [];
@@ -223,7 +233,7 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
       setToBuyList([]);
       setToBuyInput("");
     }
-  }, [isOpen, editingMenu, simpleMode, sourceMenuName, sourceMenuType]);
+  }, [isOpen, editingMenu, sourceMenuName, sourceMenuType]);
 
   if (!isOpen) return null;
 
@@ -261,39 +271,27 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
   };
 
   const handleSubmit = () => {
-    if (simpleMode) {
-      // 간소화 모드: 메뉴 이름과 집밥/외식만
-      const data = {
-        menuName,
-        sourceType,
-      };
-      console.log("AddMenuModal submit (simple):", data);
-      onSubmit?.(data);
-      onClose();
-    } else {
-      // 일반 모드: 모든 정보 포함 (status는 백엔드에서 역할에 따라 자동 설정)
-      const data = {
-        menuName,
-        sourceType,
-        // status는 제거 - 백엔드에서 역할에 따라 자동 설정
-        selectedIngredients: [
-          ...selectedFreezer.map((name) => ({
-            storage: "FREEZER" as const,
-            name,
-          })),
-          ...selectedFridge.map((name) => ({
-            storage: "FRIDGE" as const,
-            name,
-          })),
-          ...selectedRoom.map((name) => ({ storage: "ROOM" as const, name })),
-        ],
-        toBuy: toBuyList,
-      };
+    // 모든 정보 포함 (status는 백엔드에서 역할에 따라 자동 설정)
+    const data = {
+      menuName,
+      sourceType,
+      // status는 제거 - 백엔드에서 역할에 따라 자동 설정
+      selectedIngredients: [
+        ...selectedFreezer.map((name) => ({
+          storage: "FREEZER" as const,
+          name,
+        })),
+        ...selectedFridge.map((name) => ({
+          storage: "FRIDGE" as const,
+          name,
+        })),
+        ...selectedRoom.map((name) => ({ storage: "ROOM" as const, name })),
+      ],
+      toBuy: toBuyList,
+    };
 
-      console.log("AddMenuModal submit:", data);
-      onSubmit?.(data);
-      onClose();
-    }
+    onSubmit?.(data);
+    onClose();
   };
 
   const isFormValid = menuName.trim().length > 0;
@@ -309,7 +307,7 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
         <div className="flex items-start justify-between mb-4">
           <div className="flex flex-col gap-1">
             <div className="text-[18px] font-bold">
-              {editingMenu ? "메뉴 수정" : simpleMode ? "메뉴 추가" : "메뉴 추가"}
+              {editingMenu ? "메뉴 수정" : "메뉴 추가"}
             </div>
             <div className="text-[12px] text-[#847062]">{familyName}</div>
           </div>
@@ -367,10 +365,8 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
             </div>
           </div>
 
-          {!simpleMode && (
-            <>
-              {/* 재료 선택 */}
-              <div className="flex flex-col gap-2">
+          {/* 재료 선택 */}
+          <div className="flex flex-col gap-2">
                 <div className="font-semibold">재료 선택</div>
 
                 <div className="rounded-2xl border border-[#E4D8CB] bg-[#FDFBF8] px-4 py-3 flex flex-col gap-3">
@@ -411,18 +407,18 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
                                 재료가 없습니다
                               </div>
                             ) : (
-                              <div className="flex flex-wrap gap-1">
-                                {list.map((name) => (
-                                  <IngredientChip
-                                    key={name}
-                                    name={name}
-                                    selected={selected.includes(name)}
-                                    onToggle={() =>
-                                      handleToggleIngredient(storage, name)
-                                    }
-                                  />
-                                ))}
-                              </div>
+                            <div className="flex flex-wrap gap-1">
+                              {list.map((name) => (
+                                <IngredientChip
+                                  key={name}
+                                  name={name}
+                                  selected={selected.includes(name)}
+                                  onToggle={() =>
+                                    handleToggleIngredient(storage, name)
+                                  }
+                                />
+                              ))}
+                            </div>
                             )}
                           </div>
                         </div>
@@ -477,8 +473,6 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
                   </div>
                 </div>
               </div>
-            </>
-          )}
         </div>
 
         {/* 하단 버튼 */}
@@ -499,7 +493,7 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
                   ? "bg-[#F2805A] hover:brightness-95 cursor-pointer"
                   : "bg-[#F8BEAA] cursor-not-allowed"
               }`}          >
-            {editingMenu ? "수정하기" : simpleMode ? "추가하기" : "추가하기"}
+            {editingMenu ? "수정하기" : "추가하기"}
           </button>
         </div>
       </div>
