@@ -63,7 +63,6 @@ type MenuItem = {
   likes: number;
   isLiked: boolean; // 현재 사용자가 좋아요를 눌렀는지 여부
   sourceType?: "HOME" | "EAT_OUT"; // 집밥/외식 정보
-  createdBy: number; // 이 메뉴를 쓴 사용자 id
 };
 
 
@@ -98,7 +97,6 @@ function MenuCard({
   familyId,
   userId,
   userRole,
-  createdBy,
 }: MenuCardProps) {
   const stockedIngredients = ingredients.filter(
     (ing) => ing.storage_type !== "NEED"
@@ -112,12 +110,6 @@ function MenuCard({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLikeLoading, setIsLikeLoading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  // 내가 작성자인지 여부
-  const isAuthor = userId !== 0 && userId === createdBy;
-  const canDecideToday = userRole === "PARENT";
-  const canCopyToMyFamily = userRole === "FOLLOWER";
-  const canEditOrDelete = isAuthor;
 
   // initialIsLiked가 변경되면 상태 업데이트
   useEffect(() => {
@@ -199,13 +191,12 @@ function MenuCard({
             <MoreVertical size={16} className="text-[#C2B5A8]" />
           </button>
 
-           {isMenuOpen && (canDecideToday || canCopyToMyFamily || canEditOrDelete) && (
-            <div
+          {isMenuOpen && (
+            <div 
               ref={menuRef}
               className="absolute right-0 mt-1 w-40 bg-white border border-[#E7E1DA] rounded-xl shadow-lg text-[12px] text-[#32241B] z-20 overflow-hidden"
             >
-              {/* 오늘의 메뉴로 결정: 부모만 */}
-              {canDecideToday && (
+              {userRole === "PARENT" && (
                 <button
                   type="button"
                   onClick={() => handleClickMenuAction("today")}
@@ -214,38 +205,28 @@ function MenuCard({
                   오늘의 메뉴로 결정
                 </button>
               )}
-
-              {/* 내 가족 메뉴로 추가: 팔로워일 때만 */}
-              {canCopyToMyFamily && (
-                <button
-                  type="button"
-                  onClick={() => handleClickMenuAction("copy")}
-                  className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]"
-                >
-                  내 가족 메뉴로 추가
-                </button>
-              )}
-
-              {/* 수정 / 삭제: 내가 쓴 메뉴일 때만 */}
-              {canEditOrDelete && (
-                <>
-                  <div className="border-t border-[#F0E6DD]" />
-                  <button
-                    type="button"
-                    onClick={() => handleClickMenuAction("edit")}
-                    className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]"
-                  >
-                    수정
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleClickMenuAction("delete")}
-                    className="w-full text-left px-3 py-2 hover:bg-[#FFF3F0] text-[#C94F3D]"
-                  >
-                    삭제
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                onClick={() => handleClickMenuAction("copy")}
+                className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]"
+              >
+                내 가족 메뉴로 추가
+              </button>
+              <div className="border-t border-[#F0E6DD]" />
+              <button
+                type="button"
+                onClick={() => handleClickMenuAction("edit")}
+                className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]"
+              >
+                수정
+              </button>
+              <button
+                type="button"
+                onClick={() => handleClickMenuAction("delete")}
+                className="w-full text-left px-3 py-2 hover:bg-[#FFF3F0] text-[#C94F3D]"
+              >
+                삭제
+              </button>
             </div>
           )}
         </div>
@@ -401,8 +382,6 @@ export default function FamilyLeftSection({
       
       const res = await fetch(url);
       const json = await res.json();
-
-      console.log("menus 응답:", json);
 
       if (!res.ok) {
         console.error("메뉴 조회 실패:", json);
@@ -718,8 +697,8 @@ export default function FamilyLeftSection({
     }
   };
 
-    // 메뉴 삭제
-    const handleDeleteMenu = async (menuId: number) => {
+  // 메뉴 삭제
+  const handleDeleteMenu = async (menuId: number) => {
     if (!familyIdParam) {
       alert("가족 ID를 찾을 수 없습니다.");
       return;
@@ -728,12 +707,6 @@ export default function FamilyLeftSection({
     const familyIdNum = Number(familyIdParam);
     if (Number.isNaN(familyIdNum)) {
       alert("유효하지 않은 가족 ID입니다.");
-      return;
-    }
-
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      alert("로그인이 필요합니다.");
       return;
     }
 
@@ -749,7 +722,7 @@ export default function FamilyLeftSection({
 
     try {
       const res = await fetch(
-        `/family/${familyIdNum}/menus?menuId=${menuId}&userId=${currentUser.userId}`,
+        `/family/${familyIdNum}/menus?menuId=${menuId}`,
         {
           method: "DELETE",
         }
@@ -772,7 +745,6 @@ export default function FamilyLeftSection({
       alert("서버 연결 실패");
     }
   };
-
 
   // 메뉴 복사 - 가족 선택 모달 먼저 띄우기
   const handleCopyMenu = (menu: MenuItem) => {
@@ -956,18 +928,18 @@ export default function FamilyLeftSection({
               possibleMenus.map((m) => {
                 const currentUser = getCurrentUser();
                 return (
-                  <MenuCard
-                    key={m.menu_id}
-                    {...m}
-                    onEdit={() => handleEditMenu(m)}
-                    onDelete={() => handleDeleteMenu(m.menu_id)}
-                    onCopy={() => handleCopyMenu(m)}
-                    onDecideToday={() => handleDecideToday(m)}
-                          onToggleLike={handleToggleLike}
-                          familyId={Number(familyIdParam)}
-                          userId={currentUser?.userId || 0}
-                          userRole={userRole}
-                  />
+            <MenuCard
+              key={m.menu_id}
+              {...m}
+              onEdit={() => handleEditMenu(m)}
+              onDelete={() => handleDeleteMenu(m.menu_id)}
+              onCopy={() => handleCopyMenu(m)}
+              onDecideToday={() => handleDecideToday(m)}
+                    onToggleLike={handleToggleLike}
+                    familyId={Number(familyIdParam)}
+                    userId={currentUser?.userId || 0}
+                    userRole={userRole}
+            />
                 );
               })
             )}
