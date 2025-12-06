@@ -40,7 +40,7 @@ function RoleBadge({ role }: { role: Role }) {
     label = "부모";
     className += " bg-[#F2805A] text-white";
   } else if (role === "CHILD") {
-    label = "자식";
+    label = "자녀";
     className += " bg-[#86E0B3] text-[#32241B]";
   } else if (role === "FOLLOWER") {
     label = "팔로워";
@@ -219,7 +219,7 @@ export default function FamilyDetailPage() {
       // 성공 알림
       const roleLabels: { [key: string]: string } = {
         PARENT: "부모",
-        CHILD: "자식",
+        CHILD: "자녀",
         FOLLOWER: "팔로워",
       };
       const targetMember = members.find((m) => m.id === targetUserId);

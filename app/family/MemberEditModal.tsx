@@ -30,7 +30,7 @@ interface MemberEditModalProps {
 
 function roleLabel(role: Role) {
   if (role === "PARENT") return "부모";
-  if (role === "CHILD") return "자식";
+  if (role === "CHILD") return "자녀";
   return "팔로워";
 }
 
@@ -129,14 +129,14 @@ const MemberEditModal: React.FC<MemberEditModalProps> = ({
             )}
           </button>
 
-          {/* 자식 */}
+          {/* 자녀 */}
           <button
             type="button"
             onClick={() => handleSelectRole(openMember.id, "CHILD")}
             className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-[#F4FFF8]"
           >
             <span className="inline-block mr-1 rounded-full px-1.5 py-0.5 text-[10px] bg-[#86E0B3] text-[#32241B]">
-              자식
+              자녀
             </span>
             {openMember.role === "CHILD" && (
               <Check size={14} className="text-[#3E7358]" />
@@ -266,7 +266,7 @@ const MemberEditModal: React.FC<MemberEditModalProps> = ({
             </div>
             <div>
               <span className="inline-block mr-1 rounded-full px-2 py-0.5 text-[10px] bg-[#86E0B3] text-[#32241B] font-semibold">
-                자식
+                자녀
               </span>
               먹고싶어요 메뉴 작성, 좋아요, 메뉴 조회 가능
             </div>

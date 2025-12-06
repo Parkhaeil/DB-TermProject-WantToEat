@@ -79,7 +79,7 @@ export async function GET(req: Request) {
     if (!creatorIsActive) {
       roleLabel = "탈퇴함";
     } else if (firstRow.creator_role === "PARENT") roleLabel = "부모";
-    else if (firstRow.creator_role === "CHILD") roleLabel = "자식";
+    else if (firstRow.creator_role === "CHILD") roleLabel = "자녀";
     else if (firstRow.creator_role === "FOLLOWER") roleLabel = "팔로워";
 
     const processedData = {

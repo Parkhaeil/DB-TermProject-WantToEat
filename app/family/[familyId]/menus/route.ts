@@ -135,7 +135,7 @@ export async function GET(
           roleLabel = "탈퇴함";
         } else if (member?.role === "PARENT") roleLabel = "부모";
         else if (member?.role === "CHILD") roleLabel = "자녀";
-        else if (member?.role === "FOLLOWER") roleLabel = "군식구";
+        else if (member?.role === "FOLLOWER") roleLabel = "팔로워";
 
         // 2-3) 재료 정보 조회
         const { data: menuIngredients, error: ingredientsError } =

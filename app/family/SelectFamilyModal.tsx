@@ -28,7 +28,7 @@ function RoleBadge({ role }: { role: "PARENT" | "CHILD" | "FOLLOWER" }) {
     label = "부모";
     className += " bg-[#F2805A] text-white";
   } else if (role === "CHILD") {
-    label = "자식";
+    label = "자녀";
     className += " bg-[#86E0B3] text-[#32241B]";
   } else if (role === "FOLLOWER") {
     label = "팔로워";

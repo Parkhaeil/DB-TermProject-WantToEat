@@ -186,7 +186,7 @@ export default function HomePage() {
                           }`}
                       >
                         {f.role === "PARENT" && "부모"}
-                        {f.role === "CHILD" && "자식"}
+                        {f.role === "CHILD" && "자녀"}
                         {f.role === "FOLLOWER" && "팔로워"}
                       </div>
                     </div>
