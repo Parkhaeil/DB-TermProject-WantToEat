@@ -10,7 +10,7 @@ import {
   MoreVertical,
   Heart,
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import type { ChangeEvent } from "react";
 import AddMenuModal from "./AddMenuModal";
@@ -109,6 +109,7 @@ function MenuCard({
   const [likeCount, setLikeCount] = useState(likes);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLikeLoading, setIsLikeLoading] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // initialIsLiked가 변경되면 상태 업데이트
   useEffect(() => {
@@ -118,6 +119,23 @@ function MenuCard({
   useEffect(() => {
     setLikeCount(likes);
   }, [likes]);
+
+  // 외부 클릭 시 메뉴 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isMenuOpen && menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    if (isMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isMenuOpen]);
 
   const handleToggleLike = async () => {
     if (isLikeLoading) return; // 중복 요청 방지
@@ -174,7 +192,10 @@ function MenuCard({
           </button>
 
           {isMenuOpen && (
-            <div className="absolute right-0 mt-1 w-40 bg-white border border-[#E7E1DA] rounded-xl shadow-lg text-[12px] text-[#32241B] z-20 overflow-hidden">
+            <div 
+              ref={menuRef}
+              className="absolute right-0 mt-1 w-40 bg-white border border-[#E7E1DA] rounded-xl shadow-lg text-[12px] text-[#32241B] z-20 overflow-hidden"
+            >
               {userRole === "PARENT" && (
                 <button
                   type="button"
@@ -399,7 +420,10 @@ export default function FamilyLeftSection({
     selectedIngredients?: { storage: StorageType; name: string }[];
     toBuy?: string[];
   }) => {
-    if (!familyIdParam) {
+    // 선택한 가족이 있으면 그 가족의 ID 사용, 없으면 현재 접속한 가족 ID 사용
+    const targetFamilyId = selectedFamily?.family_id || familyIdParam;
+    
+    if (!targetFamilyId) {
       alert("가족 ID를 찾을 수 없습니다. 상단 페이지에서 다시 진입해주세요.");
       return;
     }
@@ -426,7 +450,7 @@ export default function FamilyLeftSection({
       return;
     }
 
-    const familyIdNum = Number(familyIdParam);
+    const familyIdNum = typeof targetFamilyId === "string" ? Number(targetFamilyId) : targetFamilyId;
     if (Number.isNaN(familyIdNum)) {
       alert("유효하지 않은 가족 ID입니다.");
       return;
@@ -434,6 +458,7 @@ export default function FamilyLeftSection({
 
     try {
       // 실제 라우트 위치: app/family/[familyId]/menus/route.ts -> /family/[familyId]/menus
+      // 선택한 가족의 ID로 메뉴 추가 (역할은 해당 가족에서의 역할로 자동 설정됨)
       const res = await fetch(`/family/${familyIdNum}/menus`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -441,7 +466,7 @@ export default function FamilyLeftSection({
           userId: currentUser.userId,
           menuName: data.menuName,
           sourceType: data.sourceType,
-          // status는 백엔드에서 역할에 따라 자동 설정됨 (전달하지 않음)
+          // status는 백엔드에서 선택한 가족에서의 역할에 따라 자동 설정됨 (전달하지 않음)
           selectedIngredients: data.selectedIngredients ?? [],
           toBuy: data.toBuy ?? [],
         }),
@@ -723,6 +748,7 @@ export default function FamilyLeftSection({
 
   // 메뉴 복사 - 가족 선택 모달 먼저 띄우기
   const handleCopyMenu = (menu: MenuItem) => {
+    setEditingMenu(null);
     setCopyingMenu(menu);
     setIsSelectFamilyOpen(true);
   };
@@ -734,8 +760,10 @@ export default function FamilyLeftSection({
     role: "PARENT" | "CHILD" | "FOLLOWER";
     member_count: number;
   }) => {
+    setEditingMenu(null);
     setSelectedFamily(family);
     setIsSelectFamilyOpen(false);
+    // copyingMenu가 있으면 메뉴 이름이 자동으로 채워지도록 모달 열기
     setIsAddMenuOpen(true);
   };
 
@@ -950,7 +978,6 @@ export default function FamilyLeftSection({
         isOpen={isSelectFamilyOpen}
         onClose={() => {
           setIsSelectFamilyOpen(false);
-          setCopyingMenu(null);
         }}
         families={families}
         onSelectFamily={handleSelectFamily}
@@ -962,10 +989,9 @@ export default function FamilyLeftSection({
         isOpen={isAddMenuOpen}
         onClose={handleCloseModal}
         familyName={selectedFamily?.family_name || "이유민네 메뉴판"}
-        familyId={familyIdParam ? Number(familyIdParam) : undefined}
+        familyId={selectedFamily?.family_id || (familyIdParam ? Number(familyIdParam) : undefined)}
         userId={getCurrentUser()?.userId}
         editingMenu={editingMenu}
-        simpleMode={!!copyingMenu}
         sourceMenuName={copyingMenu?.menu_name || ""}
         sourceMenuType={copyingMenu?.sourceType || "HOME"}
         onSubmit={async (data) => {
@@ -979,6 +1005,10 @@ export default function FamilyLeftSection({
           }
 
           handleCloseModal();
+
+
+          console.log("copyingMenu >>> ", copyingMenu);
+          console.log("AddMenuModal sourceMenuName >>> ", copyingMenu?.menu_name);
         }}
       />
     </div>
