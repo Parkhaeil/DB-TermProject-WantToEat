@@ -201,6 +201,36 @@ export async function POST(req: Request) {
       );
     }
 
+    try {
+      // 1. 메뉴에 포함된 재료 ID 목록 조회
+      const { data: menuIngredients, error: ingredientsError } = await supabaseAdmin
+        .from("menu_ingredients")
+        .select("ingredient_id")
+        .eq("menu_id", menuId);
+
+      if (!ingredientsError && menuIngredients && menuIngredients.length > 0) {
+        const ingredientIds = menuIngredients
+          .map((mi) => mi.ingredient_id)
+          .filter((id): id is number => id !== null && id !== undefined);
+
+        if (ingredientIds.length > 0) {
+          // 2. 각 재료의 usage_count 증가 (RPC 함수 사용)
+          for (const ingredientId of ingredientIds) {
+            const { error: updateError } = await supabaseAdmin.rpc("increment_usage_count", {
+              p_ingredient_id: ingredientId,
+              p_family_id: familyId,
+            });
+
+            if (updateError) {
+              console.warn(`재료 ${ingredientId}의 usage_count 증가 실패:`, updateError);
+            }
+          }
+        }
+      }
+    } catch (usageCountError) {
+      console.warn("usage_count 업데이트 실패:", usageCountError);
+    }
+
     // created_at을 날짜 문자열로 변환 (타임존 문제 방지)
     const createdAtDate = insertedData.created_at
       ? (() => {
@@ -262,6 +292,25 @@ export async function DELETE(req: Request) {
       return `${year}-${month}-${day}`;
     })();
 
+    // 삭제 전에 메뉴 ID와 재료 정보를 먼저 조회
+    const { data: todayMenuData, error: fetchError } = await supabaseAdmin
+      .from("today_menus")
+      .select("menu_id")
+      .eq("family_id", familyId)
+      .eq("target_date", targetDate)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error("오늘의 메뉴 조회 에러:", fetchError);
+      return NextResponse.json(
+        { error: "오늘의 메뉴 조회 실패" },
+        { status: 500 }
+      );
+    }
+
+    const menuId = todayMenuData?.menu_id;
+
+    // 오늘의 메뉴 삭제
     const { error: todayMenuError } = await supabaseAdmin
       .from("today_menus")
       .delete()
@@ -274,6 +323,40 @@ export async function DELETE(req: Request) {
         { error: "오늘의 메뉴 삭제 실패" },
         { status: 500 }
       );
+    }
+
+    // 메뉴에 포함된 재료들의 usage_count 감소
+    if (menuId) {
+      try {
+        // 1. 메뉴에 포함된 재료 ID 목록 조회
+        const { data: menuIngredients, error: ingredientsError } = await supabaseAdmin
+          .from("menu_ingredients")
+          .select("ingredient_id")
+          .eq("menu_id", menuId);
+
+        if (!ingredientsError && menuIngredients && menuIngredients.length > 0) {
+          const ingredientIds = menuIngredients
+            .map((mi) => mi.ingredient_id)
+            .filter((id): id is number => id !== null && id !== undefined);
+
+          if (ingredientIds.length > 0) {
+            // 2. 각 재료의 usage_count 감소 (RPC 함수 사용)
+            for (const ingredientId of ingredientIds) {
+              const { error: updateError } = await supabaseAdmin.rpc("decrement_usage_count", {
+                p_ingredient_id: ingredientId,
+                p_family_id: familyId,
+              });
+
+              if (updateError) {
+                console.warn(`재료 ${ingredientId}의 usage_count 감소 실패:`, updateError);
+              }
+            }
+          }
+        }
+      } catch (usageCountError) {
+        // usage_count 업데이트 실패해도 오늘의 메뉴 삭제는 성공한 것으로 처리
+        console.warn("usage_count 업데이트 실패:", usageCountError);
+      }
     }
 
     return NextResponse.json(
