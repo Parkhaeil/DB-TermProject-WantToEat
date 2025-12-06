@@ -299,6 +299,15 @@ export default function FamilyLeftSection({
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [isLoadingMenus, setIsLoadingMenus] = useState(true);
 
+  // ✅ 가족 목록 state
+  const [families, setFamilies] = useState<{
+    family_id: number;
+    family_name: string;
+    role: "PARENT" | "CHILD" | "FOLLOWER";
+    member_count: number;
+  }[]>([]);
+  const [isLoadingFamilies, setIsLoadingFamilies] = useState(false);
+
   // 현재 사용자 정보 가져오기
   const getCurrentUser = () => {
     const storedUser =
@@ -456,21 +465,47 @@ export default function FamilyLeftSection({
     }
   };
 
-  // 더미 가족 목록 (나중에 실제 데이터로 교체)
-  const dummyFamilies = [
-    {
-      family_id: 101,
-      family_name: "이유민네 메뉴판",
-      role: "PARENT" as const,
-      member_count: 4,
-    },
-    {
-      family_id: 102,
-      family_name: "서혜민네 메뉴판",
-      role: "FOLLOWER" as const,
-      member_count: 3,
-    },
-  ];
+  // 가족 목록 조회 함수
+  const fetchFamilies = useCallback(async () => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      console.log("로그인되지 않은 사용자 - 가족 목록 조회 불가");
+      setFamilies([]);
+      return;
+    }
+
+    try {
+      setIsLoadingFamilies(true);
+      const res = await fetch(`/api/families?userId=${currentUser.userId}`);
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error("가족 목록 조회 실패:", json);
+        setFamilies([]);
+        return;
+      }
+
+      // API 응답 형식에 맞게 변환
+      const formattedFamilies = json.map((f: any) => ({
+        family_id: f.family_id,
+        family_name: f.family_name,
+        role: f.role as "PARENT" | "CHILD" | "FOLLOWER",
+        member_count: f.member_count || 0,
+      }));
+
+      setFamilies(formattedFamilies);
+    } catch (err) {
+      console.error("가족 목록 조회 요청 에러:", err);
+      setFamilies([]);
+    } finally {
+      setIsLoadingFamilies(false);
+    }
+  }, []);
+
+  // 컴포넌트 마운트 시 가족 목록 조회
+  useEffect(() => {
+    fetchFamilies();
+  }, [fetchFamilies]);
 
   const handlePrevDay = () => {
     const d = new Date(selectedDate);
@@ -917,8 +952,9 @@ export default function FamilyLeftSection({
           setIsSelectFamilyOpen(false);
           setCopyingMenu(null);
         }}
-        families={dummyFamilies}
+        families={families}
         onSelectFamily={handleSelectFamily}
+        currentFamilyId={familyIdParam ? Number(familyIdParam) : undefined}
       />
 
       {/* 메뉴 추가/수정 모달 */}

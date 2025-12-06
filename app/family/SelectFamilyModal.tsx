@@ -16,6 +16,7 @@ interface SelectFamilyModalProps {
   onClose: () => void;
   families: Family[];
   onSelectFamily: (family: Family) => void;
+  currentFamilyId?: number; // 현재 접속 중인 가족 ID
 }
 
 function RoleBadge({ role }: { role: "PARENT" | "CHILD" | "FOLLOWER" }) {
@@ -27,7 +28,7 @@ function RoleBadge({ role }: { role: "PARENT" | "CHILD" | "FOLLOWER" }) {
     label = "부모";
     className += " bg-[#F2805A] text-white";
   } else if (role === "CHILD") {
-    label = "군식구";
+    label = "자식";
     className += " bg-[#86E0B3] text-[#32241B]";
   } else if (role === "FOLLOWER") {
     label = "팔로워";
@@ -42,10 +43,15 @@ const SelectFamilyModal: React.FC<SelectFamilyModalProps> = ({
   onClose,
   families,
   onSelectFamily,
+  currentFamilyId,
 }) => {
   if (!isOpen) return null;
 
   const handleSelect = (family: Family) => {
+    // 현재 가족은 선택 불가
+    if (currentFamilyId && family.family_id === currentFamilyId) {
+      return;
+    }
     onSelectFamily(family);
     onClose();
   };
@@ -81,12 +87,19 @@ const SelectFamilyModal: React.FC<SelectFamilyModalProps> = ({
               가족이 없습니다
             </div>
           ) : (
-            families.map((family) => (
+            families.map((family) => {
+              const isCurrentFamily = currentFamilyId && family.family_id === currentFamilyId;
+              return (
               <button
                 key={family.family_id}
                 type="button"
                 onClick={() => handleSelect(family)}
-                className="flex items-center justify-between p-4 rounded-2xl border border-[#E7E1DA] bg-white hover:bg-[#FCFAF8] transition text-left"
+                disabled={isCurrentFamily}
+                className={`flex items-center justify-between p-4 rounded-2xl border ${
+                  isCurrentFamily
+                    ? "border-[#E7E1DA] bg-[#F5F0EC] opacity-50 cursor-not-allowed"
+                    : "border-[#E7E1DA] bg-white hover:bg-[#FCFAF8]"
+                } transition text-left`}
               >
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
@@ -100,8 +113,14 @@ const SelectFamilyModal: React.FC<SelectFamilyModalProps> = ({
                     <span>멤버 {family.member_count}명</span>
                   </div>
                 </div>
+                {isCurrentFamily && (
+                  <div className="text-[12px] text-[#A28B78] font-semibold">
+                    현재 가족
+                  </div>
+                )}
               </button>
-            ))
+              );
+            })
           )}
         </div>
 
