@@ -96,15 +96,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3) 내가 만든 가족이면 참여 불가
-    if (family.created_by === userId) {
-      return NextResponse.json(
-        { error: "본인이 만든 가족에는 초대 코드로 참여할 수 없습니다." },
-        { status: 400 }
-      );
-    }
-
-    // 4) 이미 가족 구성원인지 확인
+    // 3) 이미 가족 구성원인지 확인
     const { data: existingMember, error: memberCheckError } = await supabaseAdmin
       .from("family_members")
       .select("family_id, user_id, is_active, role")
@@ -122,7 +114,7 @@ export async function POST(req: Request) {
 
     // 이미 가족 구성원인 경우
     if (existingMember) {
-      // is_active가 false인 경우, 다시 활성화
+      // is_active가 false인 경우, 다시 활성화 (본인이 만든 가족이더라도 재가입 허용)
       if (!existingMember.is_active) {
         const { error: updateError } = await supabaseAdmin
           .from("family_members")
@@ -150,8 +142,24 @@ export async function POST(req: Request) {
       }
 
       // 이미 활성 상태인 경우
+      // 본인이 만든 가족이면 초대 코드로 참여 불가
+      if (family.created_by === userId) {
+        return NextResponse.json(
+          { error: "본인이 만든 가족에는 초대 코드로 참여할 수 없습니다." },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json(
         { error: "이미 이 가족에 속해 있습니다." },
+        { status: 400 }
+      );
+    }
+
+    // 4) 새로 가입하는 경우, 본인이 만든 가족이면 참여 불가
+    if (family.created_by === userId) {
+      return NextResponse.json(
+        { error: "본인이 만든 가족에는 초대 코드로 참여할 수 없습니다." },
         { status: 400 }
       );
     }
