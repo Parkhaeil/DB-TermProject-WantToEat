@@ -453,6 +453,81 @@ export default function FamilyLeftSection({
     }
   }, [selectedDate, familyIdParam, fetchMenus]);
 
+  // 메뉴 수정 함수
+  const handleUpdateMenuToServer = async (
+    menuId: number,
+    data: {
+      menuName: string;
+      sourceType: "HOME" | "EAT_OUT";
+      selectedIngredients?: { storage: StorageType; name: string }[];
+      toBuy?: string[];
+    }
+  ) => {
+    if (!familyIdParam) {
+      alert("가족 ID를 찾을 수 없습니다. 상단 페이지에서 다시 진입해주세요.");
+      return;
+    }
+
+    const storedUser =
+      typeof window !== "undefined"
+        ? localStorage.getItem("currentUser")
+        : null;
+    const isLoggedIn =
+      typeof window !== "undefined" &&
+      localStorage.getItem("isLoggedIn") === "true";
+
+    if (!isLoggedIn || !storedUser) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+
+    let currentUser: { userId: number; email: string; nickname: string };
+    try {
+      currentUser = JSON.parse(storedUser);
+    } catch (e) {
+      console.error("currentUser 파싱 에러:", e);
+      alert("로그인 정보를 불러오는 중 오류가 발생했습니다.");
+      return;
+    }
+
+    const familyIdNum = typeof familyIdParam === "string" ? Number(familyIdParam) : familyIdParam;
+    if (Number.isNaN(familyIdNum)) {
+      alert("유효하지 않은 가족 ID입니다.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/family/${familyIdNum}/menus`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          menuId,
+          userId: currentUser.userId,
+          menuName: data.menuName,
+          sourceType: data.sourceType,
+          selectedIngredients: data.selectedIngredients ?? [],
+          toBuy: data.toBuy ?? [],
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error("메뉴 수정 실패:", json);
+        alert(json.error || "메뉴 수정 실패");
+        return;
+      }
+
+      console.log("메뉴 수정 성공:", json);
+
+      // 메뉴 수정 후 목록 새로고침 (현재 선택된 날짜 기준)
+      await fetchMenus(selectedDate);
+    } catch (err) {
+      console.error("메뉴 수정 요청 에러:", err);
+      alert("서버 연결 실패");
+    }
+  };
+
   const handleAddMenuToServer = async (data: {
     menuName: string;
     sourceType: "HOME" | "EAT_OUT";
@@ -815,6 +890,7 @@ export default function FamilyLeftSection({
 
   // 메뉴 수정
   const handleEditMenu = (menu: MenuItem) => {
+    // MenuItem을 그대로 전달 (AddMenuModal에서 필요한 필드만 사용)
     setEditingMenu(menu);
     setIsAddMenuOpen(true);
   };
@@ -1046,9 +1122,8 @@ export default function FamilyLeftSection({
         sourceMenuType={copyingMenu?.sourceType || "HOME"}
         onSubmit={async (data) => {
           if (editingMenu) {
-            // TODO: 수정 모드도 나중에 서버 API와 연동
-            // 현재는 추가 API를 사용하여 처리
-            await handleAddMenuToServer(data);
+            // 수정 모드: PATCH API 호출
+            await handleUpdateMenuToServer(editingMenu.menu_id, data);
           } else {
             // 추가 모드 및 복사 모드는 공통으로 서버에 메뉴 생성
             await handleAddMenuToServer(data);
