@@ -472,7 +472,7 @@ const AddMenuModal: React.FC<AddMenuModalProps> = ({
                     <button
                       type="button"
                       onClick={handleAddToBuy}
-                      className="ml-auto flex items-center justify-center w-5 h-5 rounded-full bg-[#F4B59A] text-white text-[9px]"
+                      className="ml-auto flex items-center justify-center w-5 h-5 rounded-full bg-[#F2805A] text-white text-[9px]"
                     >
                       <Plus size={10} />
                     </button>
