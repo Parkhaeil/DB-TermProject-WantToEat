@@ -63,6 +63,7 @@ type MenuItem = {
   likes: number;
   isLiked: boolean; // 현재 사용자가 좋아요를 눌렀는지 여부
   sourceType?: "HOME" | "EAT_OUT"; // 집밥/외식 정보
+  createdBy: number; // 이 메뉴를 쓴 사용자 id
 };
 
 
@@ -97,6 +98,7 @@ function MenuCard({
   familyId,
   userId,
   userRole,
+  createdBy,
 }: MenuCardProps) {
   const stockedIngredients = ingredients.filter(
     (ing) => ing.storage_type !== "NEED"
@@ -110,6 +112,9 @@ function MenuCard({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLikeLoading, setIsLikeLoading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // 내가 작성자인지 여부
+  const isAuthor = userId !== 0 && userId === createdBy;
 
   // initialIsLiked가 변경되면 상태 업데이트
   useEffect(() => {
@@ -697,8 +702,8 @@ export default function FamilyLeftSection({
     }
   };
 
-  // 메뉴 삭제
-  const handleDeleteMenu = async (menuId: number) => {
+    // 메뉴 삭제
+    const handleDeleteMenu = async (menuId: number) => {
     if (!familyIdParam) {
       alert("가족 ID를 찾을 수 없습니다.");
       return;
@@ -707,6 +712,12 @@ export default function FamilyLeftSection({
     const familyIdNum = Number(familyIdParam);
     if (Number.isNaN(familyIdNum)) {
       alert("유효하지 않은 가족 ID입니다.");
+      return;
+    }
+
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      alert("로그인이 필요합니다.");
       return;
     }
 
@@ -722,7 +733,7 @@ export default function FamilyLeftSection({
 
     try {
       const res = await fetch(
-        `/family/${familyIdNum}/menus?menuId=${menuId}`,
+        `/family/${familyIdNum}/menus?menuId=${menuId}&userId=${currentUser.userId}`,
         {
           method: "DELETE",
         }
@@ -745,6 +756,7 @@ export default function FamilyLeftSection({
       alert("서버 연결 실패");
     }
   };
+
 
   // 메뉴 복사 - 가족 선택 모달 먼저 띄우기
   const handleCopyMenu = (menu: MenuItem) => {

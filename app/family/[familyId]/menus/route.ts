@@ -38,6 +38,7 @@ type MenuResponse = {
   likes: number;
   isLiked: boolean; // 현재 사용자가 좋아요를 눌렀는지 여부
   sourceType: SourceType;
+  createdBy: number;
 };
 
 export async function GET(
@@ -214,6 +215,7 @@ export async function GET(
           likes,
           isLiked,
           sourceType: menu.source_type as SourceType,
+          createdBy,
         };
       })
     );
@@ -445,8 +447,10 @@ export async function DELETE(
 
     // URL에서 menuId 추출 (예: /family/1/menus?menuId=123)
     const url = new URL(req.url);
+    const userIdStr = url.searchParams.get("userId");
     const menuIdStr = url.searchParams.get("menuId");
     const menuId = menuIdStr ? Number(menuIdStr) : null;
+    const userId = userIdStr ? Number(userIdStr) : null;
 
     if (!menuId || Number.isNaN(menuId)) {
       return NextResponse.json(
@@ -458,7 +462,7 @@ export async function DELETE(
     // 메뉴가 해당 가족에 속하는지 확인
     const { data: menu, error: menuCheckError } = await supabaseAdmin
       .from("menus")
-      .select("menu_id, family_id")
+      .select("menu_id, family_id, created_by")
       .eq("menu_id", menuId)
       .eq("family_id", familyId)
       .single();
@@ -467,6 +471,13 @@ export async function DELETE(
       return NextResponse.json(
         { error: "메뉴를 찾을 수 없거나 권한이 없습니다." },
         { status: 404 }
+      );
+    }
+
+    if (menu.created_by !== userId) {
+      return NextResponse.json(
+        { error: "이 메뉴를 삭제할 권한이 없습니다. (작성자만 삭제 가능)" },
+        { status: 403 }
       );
     }
 
