@@ -9,7 +9,7 @@ import FamilyRightSection from "../FamilyRightSection";
 import AddMenuModal from "../AddMenuModal";
 
 import { useRouter, useParams } from "next/navigation";
-import { Users, ArrowLeft, Key, Settings } from "lucide-react";
+import { Users, ArrowLeft, Key, Settings, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type Role = "PARENT" | "CHILD" | "FOLLOWER";
@@ -67,6 +67,16 @@ export default function FamilyDetailPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null); // ⭐ 현재 유저
 
   const [members, setMembers] = useState<FamilyMember[]>([]);
+
+  // 로그아웃 핸들러
+  const handleLogout = () => {
+    setCurrentUser(null);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("isLoggedIn");
+      localStorage.removeItem("currentUser");
+    }
+    router.push("/");
+  };
 
   useEffect(() => {
     if (!familyIdParam) return;
@@ -334,10 +344,11 @@ export default function FamilyDetailPage() {
     }
   };
 
-  return (
+    return (
     <div className="flex flex-col w-screen min-h-screen bg-[#FCFAF8] text-[#32241B]">
       {/* 헤더 */}
       <div className="flex items-center justify-between w-full h-[72px] gap-4 px-10 bg-[#FFFFFF] border-b border-[#E7E1DA]">
+        {/* 왼쪽: 뒤로가기 + 가족 정보 */}
         <div className="flex gap-3">
           <button
             type="button"
@@ -361,27 +372,53 @@ export default function FamilyDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setIsInviteModalOpen(true)}
-            className="flex gap-1 items-center bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
-                        text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
-          >
-            <Key size={15} />
-            초대코드
-          </button>
-          {currentFamilyRole === "PARENT" && (
+
+        {/* 오른쪽: 가족 버튼들 + 로그인한 유저 정보/로그아웃 */}
+        <div className="flex items-center gap-6">
+          {/* 초대코드 / 가족 관리 버튼 묶음 */}
+          <div className="flex gap-2">
             <button
-              onClick={() => setIsMemberModalOpen(true)}
+              onClick={() => setIsInviteModalOpen(true)}
               className="flex gap-1 items-center bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
                           text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
             >
-              <Settings size={15} />
-              가족 관리
+              <Key size={15} />
+              초대코드
             </button>
+            {currentFamilyRole === "PARENT" && (
+              <button
+                onClick={() => setIsMemberModalOpen(true)}
+                className="flex gap-1 items-center bg-[#FCFAF8] border border-[#E9E4DE] px-4 py-2 rounded-xl 
+                            text-[12px] font-semibold transition-all duration-150 transform active:scale-95"
+              >
+                <Settings size={15} />
+                가족 관리
+              </button>
+            )}
+          </div>
+
+          {/* 현재 로그인 유저 정보 + 로그아웃 (HomePage랑 스타일 맞춤) */}
+          {currentUser && (
+            <div className="flex items-center gap-3">
+              <div className="leading-4 flex flex-col items-end">
+                <div className="text-[10px] text-[#847062]">안녕하세요,</div>
+                <div className="text-[14px] font-bold">
+                  {currentUser.nickname ?? "사용자"}님
+                </div>
+              </div>
+
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-xl border border-[#E9E4DE] bg-[#FCFAF8]
+                           transition-all duration-150 transform active:scale-95"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
           )}
         </div>
       </div>
+
 
       {/* 에러 메시지 */}
       {error && (
