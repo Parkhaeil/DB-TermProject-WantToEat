@@ -115,6 +115,9 @@ function MenuCard({
 
   // 내가 작성자인지 여부
   const isAuthor = userId !== 0 && userId === createdBy;
+  const canDecideToday = userRole === "PARENT";
+  const canCopyToMyFamily = userRole === "FOLLOWER";
+  const canEditOrDelete = isAuthor;
 
   // initialIsLiked가 변경되면 상태 업데이트
   useEffect(() => {
@@ -196,12 +199,13 @@ function MenuCard({
             <MoreVertical size={16} className="text-[#C2B5A8]" />
           </button>
 
-          {isMenuOpen && (
-            <div 
+           {isMenuOpen && (canDecideToday || canCopyToMyFamily || canEditOrDelete) && (
+            <div
               ref={menuRef}
               className="absolute right-0 mt-1 w-40 bg-white border border-[#E7E1DA] rounded-xl shadow-lg text-[12px] text-[#32241B] z-20 overflow-hidden"
             >
-              {userRole === "PARENT" && (
+              {/* 오늘의 메뉴로 결정: 부모만 */}
+              {canDecideToday && (
                 <button
                   type="button"
                   onClick={() => handleClickMenuAction("today")}
@@ -210,28 +214,38 @@ function MenuCard({
                   오늘의 메뉴로 결정
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => handleClickMenuAction("copy")}
-                className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]"
-              >
-                내 가족 메뉴로 추가
-              </button>
-              <div className="border-t border-[#F0E6DD]" />
-              <button
-                type="button"
-                onClick={() => handleClickMenuAction("edit")}
-                className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]"
-              >
-                수정
-              </button>
-              <button
-                type="button"
-                onClick={() => handleClickMenuAction("delete")}
-                className="w-full text-left px-3 py-2 hover:bg-[#FFF3F0] text-[#C94F3D]"
-              >
-                삭제
-              </button>
+
+              {/* 내 가족 메뉴로 추가: 팔로워일 때만 */}
+              {canCopyToMyFamily && (
+                <button
+                  type="button"
+                  onClick={() => handleClickMenuAction("copy")}
+                  className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]"
+                >
+                  내 가족 메뉴로 추가
+                </button>
+              )}
+
+              {/* 수정 / 삭제: 내가 쓴 메뉴일 때만 */}
+              {canEditOrDelete && (
+                <>
+                  <div className="border-t border-[#F0E6DD]" />
+                  <button
+                    type="button"
+                    onClick={() => handleClickMenuAction("edit")}
+                    className="w-full text-left px-3 py-2 hover:bg-[#FCFAF8]"
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleClickMenuAction("delete")}
+                    className="w-full text-left px-3 py-2 hover:bg-[#FFF3F0] text-[#C94F3D]"
+                  >
+                    삭제
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -387,6 +401,8 @@ export default function FamilyLeftSection({
       
       const res = await fetch(url);
       const json = await res.json();
+
+      console.log("menus 응답:", json);
 
       if (!res.ok) {
         console.error("메뉴 조회 실패:", json);
@@ -940,18 +956,18 @@ export default function FamilyLeftSection({
               possibleMenus.map((m) => {
                 const currentUser = getCurrentUser();
                 return (
-            <MenuCard
-              key={m.menu_id}
-              {...m}
-              onEdit={() => handleEditMenu(m)}
-              onDelete={() => handleDeleteMenu(m.menu_id)}
-              onCopy={() => handleCopyMenu(m)}
-              onDecideToday={() => handleDecideToday(m)}
-                    onToggleLike={handleToggleLike}
-                    familyId={Number(familyIdParam)}
-                    userId={currentUser?.userId || 0}
-                    userRole={userRole}
-            />
+                  <MenuCard
+                    key={m.menu_id}
+                    {...m}
+                    onEdit={() => handleEditMenu(m)}
+                    onDelete={() => handleDeleteMenu(m.menu_id)}
+                    onCopy={() => handleCopyMenu(m)}
+                    onDecideToday={() => handleDecideToday(m)}
+                          onToggleLike={handleToggleLike}
+                          familyId={Number(familyIdParam)}
+                          userId={currentUser?.userId || 0}
+                          userRole={userRole}
+                  />
                 );
               })
             )}
