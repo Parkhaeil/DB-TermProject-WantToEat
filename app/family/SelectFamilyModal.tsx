@@ -52,6 +52,10 @@ const SelectFamilyModal: React.FC<SelectFamilyModalProps> = ({
     if (currentFamilyId && family.family_id === currentFamilyId) {
       return;
     }
+    // 팔로워 역할인 가족은 선택 불가
+    if (family.role === "FOLLOWER") {
+      return;
+    }
     onSelectFamily(family);
     onClose();
   };
@@ -89,14 +93,16 @@ const SelectFamilyModal: React.FC<SelectFamilyModalProps> = ({
           ) : (
             families.map((family) => {
               const isCurrentFamily = currentFamilyId && family.family_id === currentFamilyId;
+              const isFollower = family.role === "FOLLOWER";
+              const isDisabled = isCurrentFamily || isFollower;
               return (
               <button
                 key={family.family_id}
                 type="button"
                 onClick={() => handleSelect(family)}
-                disabled={isCurrentFamily}
+                disabled={isDisabled}
                 className={`flex items-center justify-between p-4 rounded-2xl border ${
-                  isCurrentFamily
+                  isDisabled
                     ? "border-[#E7E1DA] bg-[#F5F0EC] opacity-50 cursor-not-allowed"
                     : "border-[#E7E1DA] bg-white hover:bg-[#FCFAF8]"
                 } transition text-left`}
@@ -116,6 +122,11 @@ const SelectFamilyModal: React.FC<SelectFamilyModalProps> = ({
                 {isCurrentFamily && (
                   <div className="text-[12px] text-[#A28B78] font-semibold">
                     현재 가족
+                  </div>
+                )}
+                {isFollower && !isCurrentFamily && (
+                  <div className="text-[12px] text-[#A28B78] font-semibold">
+                    선택 불가
                   </div>
                 )}
               </button>
