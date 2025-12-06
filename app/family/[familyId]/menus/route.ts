@@ -214,6 +214,7 @@ export async function GET(
           likes,
           isLiked,
           sourceType: menu.source_type as SourceType,
+          createdBy: menu.created_by as number,
         };
       })
     );
