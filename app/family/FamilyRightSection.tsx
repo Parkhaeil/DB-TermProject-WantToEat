@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   BarChart3,
   ChevronRight,
@@ -209,6 +209,7 @@ export default function FamilyRightSection({
   selectedDate 
 }: FamilyRightSectionProps) {
   const params = useParams();
+  const router = useRouter();
   const familyIdParam = params?.familyId;
 
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
@@ -437,6 +438,94 @@ export default function FamilyRightSection({
       await reloadTodayMenu(selectedDate);
     } catch (err) {
       console.error("오늘의 메뉴 삭제 중 오류:", err);
+      alert("서버 연결 실패");
+    }
+  };
+
+  // 가족 탈퇴 핸들러
+  const handleQuitFamily = async () => {
+    if (!familyIdParam) {
+      alert("가족 ID를 찾을 수 없습니다.");
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+
+    const storedUser = localStorage.getItem("currentUser");
+    const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+
+    if (!isLoggedIn || !storedUser) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+
+    try {
+      const currentUser = JSON.parse(storedUser);
+      const userId = currentUser.userId;
+      const familyIdNum = Number(familyIdParam);
+
+      if (Number.isNaN(familyIdNum)) {
+        alert("유효하지 않은 가족 ID입니다.");
+        return;
+      }
+
+      // 1단계: 탈퇴 요청 (마지막 부모인지 확인)
+      const res = await fetch("/api/families/quit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          familyId: familyIdNum,
+          userId: userId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("가족 탈퇴 실패:", data);
+        alert(data.error || "가족 탈퇴에 실패했습니다.");
+        return;
+      }
+
+      // 마지막 부모인 경우 확인 받기
+      if (data.isLastParent) {
+        const confirmed = confirm(
+          "마지막 부모입니다. 탈퇴하시면 가족이 삭제됩니다. 탈퇴하시겠습니까?"
+        );
+
+        if (!confirmed) {
+          return; // 취소하면 그냥 종료
+        }
+
+        // 확인했으면 confirm: true로 다시 요청
+        const confirmRes = await fetch("/api/families/quit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            familyId: familyIdNum,
+            userId: userId,
+            confirm: true,
+          }),
+        });
+
+        const confirmData = await confirmRes.json();
+
+        if (!confirmRes.ok) {
+          console.error("가족 탈퇴 실패:", confirmData);
+          alert(confirmData.error || "가족 탈퇴에 실패했습니다.");
+          return;
+        }
+
+        alert(confirmData.message || "가족에서 탈퇴했습니다.");
+      } else {
+        // 마지막 부모가 아니면 바로 탈퇴 완료
+        alert(data.message || "가족에서 탈퇴했습니다.");
+      }
+
+      // 탈퇴 성공 시 홈으로 이동
+      router.push("/");
+    } catch (err) {
+      console.error("가족 탈퇴 요청 오류:", err);
       alert("서버 연결 실패");
     }
   };
@@ -818,6 +907,7 @@ export default function FamilyRightSection({
         <div className="mt-4 flex justify-center">
           <button
             type="button"
+            onClick={handleQuitFamily}
             className="text-[12px] text-red-500 underline bg-transparent border-none outline-none"
           >
             가족 탈퇴하기
