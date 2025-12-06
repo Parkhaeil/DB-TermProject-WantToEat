@@ -62,18 +62,28 @@ function FridgeTag({
   label,
   deletable,
   onDelete,
+  onClick,
 }: {
   label: string;
   deletable?: boolean;
   onDelete?: () => void;
+  onClick?: () => void;
 }) {
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white border border-[#E7E1DA] text-[10px] font-semibold">
+    <span 
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white border border-[#E7E1DA] text-[10px] font-semibold ${
+        onClick ? "cursor-pointer hover:bg-[#FCFAF8]" : ""
+      }`}
+      onClick={onClick}
+    >
       <span>{label}</span>
       {deletable && onDelete && (
         <button
           type="button"
-          onClick={onDelete}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
           className="ml-0.5 text-[9px] text-[#C2B5A8] hover:text-[#A0615A]"
         >
           ×
@@ -219,9 +229,10 @@ export default function FamilyRightSection({
   const [isLoadingTodayMenu, setIsLoadingTodayMenu] = useState(false);
 
   // 냉장고 아이템 (서버 + 클라이언트 추가)
-  const [freezerItems, setFreezerItems] = useState<string[]>([]);
-  const [fridgeItems, setFridgeItems] = useState<string[]>([]);
-  const [roomItems, setRoomItems] = useState<string[]>([]);
+  type IngredientItem = { id: number; name: string };
+  const [freezerItems, setFreezerItems] = useState<IngredientItem[]>([]);
+  const [fridgeItems, setFridgeItems] = useState<IngredientItem[]>([]);
+  const [roomItems, setRoomItems] = useState<IngredientItem[]>([]);
 
   // 재료 추가 팝오버 상태
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -229,6 +240,15 @@ export default function FamilyRightSection({
   const [selectedStorage, setSelectedStorage] =
     useState<SimpleStorage>("FREEZER");
   const [isStorageDropdownOpen, setIsStorageDropdownOpen] = useState(false);
+
+  // 재료 수정 상태
+  const [editingIngredient, setEditingIngredient] = useState<{
+    id: number;
+    name: string;
+    storage: SimpleStorage;
+  } | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editStorage, setEditStorage] = useState<SimpleStorage>("FREEZER");
 
   const reloadFridge = async () => {
     if (!familyIdParam) return;
@@ -574,14 +594,17 @@ export default function FamilyRightSection({
 
       if (!res.ok) {
         console.error("재료 추가 에러:", data);
+        alert(data.error || "재료 추가에 실패했습니다.");
         return;
       }
 
       setFreezerItems(data.freezer ?? []);
       setFridgeItems(data.fridge ?? []);
       setRoomItems(data.room ?? []);
+      alert("재료가 추가되었습니다.");
     } catch (err) {
       console.error("재료 추가 중 오류:", err);
+      alert("서버 연결 실패");
     }
 
     setNewName("");
@@ -597,12 +620,16 @@ export default function FamilyRightSection({
     if (!familyIdParam) return;
     if (typeof window === "undefined") return;
 
+    if (!confirm(`${name}을(를) 삭제하시겠습니까?`)) {
+      return;
+    }
+
     try {
       const storedUser = localStorage.getItem("currentUser");
       const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
 
       if (!isLoggedIn || !storedUser) {
-        console.warn("로그인 정보가 없어 재료를 삭제할 수 없습니다.");
+        alert("로그인이 필요합니다.");
         return;
       }
 
@@ -627,15 +654,109 @@ export default function FamilyRightSection({
 
       if (!res.ok) {
         console.error("재료 삭제 에러:", data);
+        alert(data.error || "재료 삭제에 실패했습니다.");
         return;
       }
 
       setFreezerItems(data.freezer ?? []);
       setFridgeItems(data.fridge ?? []);
       setRoomItems(data.room ?? []);
+      alert("재료가 삭제되었습니다.");
     } catch (err) {
       console.error("재료 삭제 중 오류:", err);
+      alert("서버 연결 실패");
     }
+  };
+
+  // 재료 수정 핸들러
+  const handleEditIngredient = (ingredient: IngredientItem, storage: SimpleStorage) => {
+    if (userRole !== "PARENT") return;
+    setEditingIngredient({ id: ingredient.id, name: ingredient.name, storage });
+    setEditName(ingredient.name);
+    setEditStorage(storage);
+    setIsAddOpen(false);
+  };
+
+  const handleSaveEditIngredient = async () => {
+    if (!editingIngredient) return;
+    if (!familyIdParam) return;
+    if (typeof window === "undefined") return;
+
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      alert("재료 이름을 입력해주세요.");
+      return;
+    }
+
+    try {
+      const storedUser = localStorage.getItem("currentUser");
+      const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+
+      if (!isLoggedIn || !storedUser) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
+
+      const currentUser = JSON.parse(storedUser);
+      const userId = currentUser.userId;
+      const familyIdNum = Number(familyIdParam);
+
+      const updateData: {
+        familyId: number;
+        userId: number;
+        ingredientId: number;
+        ingredientName?: string;
+        storageType?: SimpleStorage;
+      } = {
+        familyId: familyIdNum,
+        userId,
+        ingredientId: editingIngredient.id,
+      };
+
+      if (trimmedName !== editingIngredient.name) {
+        updateData.ingredientName = trimmedName;
+      }
+      if (editStorage !== editingIngredient.storage) {
+        updateData.storageType = editStorage;
+      }
+
+      // 변경사항이 없으면 그냥 닫기
+      if (!updateData.ingredientName && !updateData.storageType) {
+        setEditingIngredient(null);
+        return;
+      }
+
+      const res = await fetch("/api/fridge", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("재료 수정 에러:", data);
+        alert(data.error || "재료 수정에 실패했습니다.");
+        return;
+      }
+
+      setFreezerItems(data.freezer ?? []);
+      setFridgeItems(data.fridge ?? []);
+      setRoomItems(data.room ?? []);
+      setEditingIngredient(null);
+      alert("재료가 수정되었습니다.");
+    } catch (err) {
+      console.error("재료 수정 중 오류:", err);
+      alert("서버 연결 실패");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingIngredient(null);
+    setEditName("");
+    setEditStorage("FREEZER");
   };
 
   const currentMeta = storageMeta[selectedStorage];
@@ -721,12 +842,13 @@ export default function FamilyRightSection({
                   아직 등록된 재료가 없어요.
                 </span>
               ) : (
-                freezerItems.map((name) => (
+                freezerItems.map((item) => (
                   <FridgeTag
-                    key={name}
-                    label={name}
-                    deletable
-                    onDelete={() => handleDeleteIngredient("FREEZER", name)}
+                    key={item.id}
+                    label={item.name}
+                    deletable={userRole === "PARENT"}
+                    onDelete={userRole === "PARENT" ? () => handleDeleteIngredient("FREEZER", item.name) : undefined}
+                    onClick={userRole === "PARENT" ? () => handleEditIngredient(item, "FREEZER") : undefined}
                   />
                 ))
               )}
@@ -753,12 +875,13 @@ export default function FamilyRightSection({
                   아직 등록된 재료가 없어요.
                 </span>
               ) : (
-                fridgeItems.map((name) => (
+                fridgeItems.map((item) => (
                   <FridgeTag
-                    key={name}
-                    label={name}
-                    deletable
-                    onDelete={() => handleDeleteIngredient("FRIDGE", name)}
+                    key={item.id}
+                    label={item.name}
+                    deletable={userRole === "PARENT"}
+                    onDelete={userRole === "PARENT" ? () => handleDeleteIngredient("FRIDGE", item.name) : undefined}
+                    onClick={userRole === "PARENT" ? () => handleEditIngredient(item, "FRIDGE") : undefined}
                   />
                 ))
               )}
@@ -766,7 +889,7 @@ export default function FamilyRightSection({
           </div>
 
           {/* 실온 (세로선 없음) */}
-          <div className="mx-4 mb-2 rounded-2xl bg-[#FFFBF7] border border-[#F1E0CC]">
+          <div className="mx-4 mb-2 rounded-2xl bg-[#FFFBF7] border border-[#F1E0CC] mb-4">
             <div className="flex items-start justify-between px-4 pt-3 pb-2">
               <div className="flex items-center gap-2">
                 <Thermometer size={16} className="text-[#F07A5A]" />
@@ -782,31 +905,132 @@ export default function FamilyRightSection({
                   아직 등록된 재료가 없어요.
                 </span>
               ) : (
-                roomItems.map((name) => (
+                roomItems.map((item) => (
                   <FridgeTag
-                    key={name}
-                    label={name}
-                    deletable
-                    onDelete={() => handleDeleteIngredient("ROOM", name)}
+                    key={item.id}
+                    label={item.name}
+                    deletable={userRole === "PARENT"}
+                    onDelete={userRole === "PARENT" ? () => handleDeleteIngredient("ROOM", item.name) : undefined}
+                    onClick={userRole === "PARENT" ? () => handleEditIngredient(item, "ROOM") : undefined}
                   />
                 ))
               )}
             </div>
           </div>
 
-          {/* 재료 추가 버튼 */}
-          <button
-            className="flex items-center justify-center gap-1 border-t border-[#E7E1DA] py-3 text-[12px] hover:bg-[#FCFAF8]"
-            type="button"
-            onClick={() => setIsAddOpen((p) => !p)}
-          >
-            <Plus size={16} className="text-[#32241B]" />
-            재료 추가
-          </button>
+          {/* 재료 추가 버튼 (부모만 보임) */}
+          {userRole === "PARENT" && (
+            <button
+              className="flex items-center justify-center gap-1 border-t border-[#E7E1DA] py-3 text-[12px] hover:bg-[#FCFAF8]"
+              type="button"
+              onClick={() => setIsAddOpen((p) => !p)}
+            >
+              <Plus size={16} className="text-[#32241B]" />
+              재료 추가
+            </button>
+          )}
         </div>
 
+        {/* 재료 수정 팝오버 */}
+        {editingIngredient && (
+          <div className="absolute top-4/5 right-full -translate-y-1/2 mr-4 w-[260px] rounded-2xl bg-[#FFFFFF] border border-[#E7E1DA] shadow-xl px-5 py-4 z-30">
+            <div className="text-[12px] font-semibold text-[#32241B] mb-3">
+              재료 수정
+            </div>
+            
+            {/* 입력 필드 */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex-1 rounded-full border border-[#E7E1DA] bg-white px-4 py-2 text-[12px] text-[#32241B]">
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="재료 이름"
+                  className="w-full outline-none text-[12px] text-[#32241B] placeholder:text-[#C2B5A8] bg-transparent"
+                />
+              </div>
+
+              {/* 저장 위치 드롭다운 */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIsStorageDropdownOpen((prev) => !prev)
+                  }
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-[#E7E1DA] bg-white text-[12px] font-semibold min-w-[80px]"
+                >
+                  {storageMeta[editStorage].icon}
+                  <span className={storageMeta[editStorage].colorClass}>
+                    {storageMeta[editStorage].label}
+                  </span>
+                </button>
+
+                {isStorageDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-full rounded-xl border border-[#E7E1DA] bg-white shadow-lg overflow-hidden z-40">
+                    {(Object.keys(storageMeta) as SimpleStorage[]).map(
+                      (key) => {
+                        const meta = storageMeta[key];
+                        const isActive = editStorage === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => {
+                              setEditStorage(key);
+                              setIsStorageDropdownOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between px-3 py-2 ${
+                              isActive
+                                ? "bg-[#FFF2D9]"
+                                : "bg-white hover:bg-[#FCFAF8]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              {meta.icon}
+                              <span className={meta.colorClass}>
+                                {meta.label}
+                              </span>
+                            </div>
+                            {isActive && (
+                              <Check size={14} className="text-[#E0A85A]" />
+                            )}
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 버튼들 */}
+            <div className="flex gap-2 mt-2">
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="flex-1 rounded-2xl border border-[#E7E1DA] bg-[#FFFFFF] py-2 text-[12px] font-semibold text-[#32241B] hover:bg-[#FCFAF8]"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditIngredient}
+                disabled={!editName.trim()}
+                className={`flex-1 rounded-2xl py-2 text-[12px] font-semibold text-white transition
+                  ${
+                    editName.trim()
+                      ? "bg-[#F2805A] hover:brightness-95 cursor-pointer"
+                      : "bg-[#F8BEAA] cursor-not-allowed"
+                  }`}
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 재료 추가 팝오버 - 카드 왼쪽에 표시 */}
-        {isAddOpen && (
+        {isAddOpen && !editingIngredient && (
           <div className="absolute top-4/5 right-full -translate-y-1/2 mr-4 w-[260px] rounded-2xl bg-[#FFFFFF] border border-[#E7E1DA] shadow-xl px-5 py-4 z-30">
             {/* 입력 필드 */}
             <div className="flex items-center gap-3 mb-3">
